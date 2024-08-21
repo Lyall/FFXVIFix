@@ -27,6 +27,7 @@ std::pair DesktopDimensions = { 0,0 };
 bool bFixResolution;
 bool bFixHUD;
 bool bFixFOV;
+float fAdditionalFOV;
 bool bUncapFPS;
 
 // Aspect ratio + HUD stuff
@@ -137,12 +138,18 @@ void Configuration()
     inipp::get_value(ini.sections["Fix Resolution"], "Enabled", bFixResolution);
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
+    inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
     spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
     spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
+    if (fAdditionalFOV < (float)-80 || fAdditionalFOV >(float)80) {
+        fAdditionalFOV = std::clamp(fAdditionalFOV, (float)-80, (float)80);
+        spdlog::warn("Config Parse: fAdditionalFOV value invalid, clamped to {}", fAdditionalFOV);
+    }
+    spdlog::info("Config Parse: fAdditionalFOV: {}", fAdditionalFOV);
     spdlog::info("Config Parse: bUncapFPS: {}", bUncapFPS);
     spdlog::info("----------");
 
@@ -155,17 +162,19 @@ void Configuration()
 
 void Resolution()
 {
-    // Fix borderles/fullscreen resolution
-    uint8_t* ResolutionFixScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 74 ?? 41 ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? C5 ?? ?? ??");
-    if (ResolutionFixScanResult) {
-        spdlog::info("Resolution Fix: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ResolutionFixScanResult - (uintptr_t)baseModule);
-        // Stop resolution for being scaled to 16:9 in borderless/fullscreen.
-        Memory::PatchBytes((uintptr_t)ResolutionFixScanResult + 0x3, "\xEB", 1);
-        spdlog::info("Resolution Fix: Patched instruction.");
+    if (bFixResolution) {
+        // Fix borderles/fullscreen resolution
+        uint8_t* ResolutionFixScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 74 ?? 41 ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? C5 ?? ?? ??");
+        if (ResolutionFixScanResult) {
+            spdlog::info("Resolution Fix: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ResolutionFixScanResult - (uintptr_t)baseModule);
+            // Stop resolution for being scaled to 16:9 in borderless/fullscreen.
+            Memory::PatchBytes((uintptr_t)ResolutionFixScanResult + 0x3, "\xEB", 1);
+            spdlog::info("Resolution Fix: Patched instruction.");
+        }
+        else if (!ResolutionFixScanResult) {
+            spdlog::error("Resolution Fix: Pattern scan failed.");
+        }
     }
-    else if (!ResolutionFixScanResult) {
-        spdlog::error("Resolution Fix: Pattern scan failed.");
-    }  
 
     // Current Resolution
     uint8_t* CurrentResolutionScanResult = Memory::PatternScan(baseModule, "48 89 ?? ?? 8B ?? ?? ?? ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 8B ?? ?? ?? ?? ??");
@@ -263,7 +272,7 @@ void HUD()
 void FOV()
 {
     if (bFixFOV) { 
-        // FOV
+        // Fix <16:9 FOV
         uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 45 ?? ?? 48 8B ?? ?? ?? ?? ?? 48 85 ?? 74 ??");
         if (FOVScanResult) {
             spdlog::info("FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FOVScanResult - (uintptr_t)baseModule);
@@ -272,12 +281,28 @@ void FOV()
                 [](SafetyHookContext& ctx) {
                     // Fix cropped FOV when at <16:9
                     if (fAspectRatio < fNativeAspect) {
-                        ctx.xmm11.f32[0] /= fAspectMultiplier;
+                        ctx.xmm11.f32[0] = 2.0f * atanf(tanf(ctx.xmm11.f32[0] / 2.0f) * (fNativeAspect / fAspectRatio));
                     }
                 });
         }
         else if (!FOVScanResult) {
             spdlog::error("FOV: Pattern scan failed.");
+        }
+    }
+
+    if (fAdditionalFOV != 0.00f) {
+        // Gameplay FOV
+        uint8_t* GameplayFOVScanResult = Memory::PatternScan(baseModule, "48 8D ?? ?? ?? ?? ?? C3 C5 FA ?? ?? ?? ?? ?? 00 C5 FA ?? ?? ?? ?? ?? ?? C5 F2 ?? ?? ?? ?? ?? ?? C3");
+        if (GameplayFOVScanResult) {
+            spdlog::info("Gameplay FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayFOVScanResult - (uintptr_t)baseModule);
+            static SafetyHookMid GameplayFOVMidHook{};
+            GameplayFOVMidHook = safetyhook::create_mid(GameplayFOVScanResult + 0x10,
+                [](SafetyHookContext& ctx) {
+                    ctx.xmm0.f32[0] += fAdditionalFOV;
+                });
+        }
+        else if (!GameplayFOVScanResult) {
+            spdlog::error("Gameplay FOV: Pattern scan failed.");
         }
     }
 }
