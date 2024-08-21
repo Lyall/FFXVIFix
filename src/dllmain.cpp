@@ -26,6 +26,7 @@ std::pair DesktopDimensions = { 0,0 };
 // Ini variables
 bool bFixResolution;
 bool bFixHUD;
+bool bFixFOV;
 bool bUncapFPS;
 
 // Aspect ratio + HUD stuff
@@ -135,11 +136,13 @@ void Configuration()
     ini.strip_trailing_comments();
     inipp::get_value(ini.sections["Fix Resolution"], "Enabled", bFixResolution);
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
+    inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
     spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
+    spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
     spdlog::info("Config Parse: bUncapFPS: {}", bUncapFPS);
     spdlog::info("----------");
 
@@ -152,22 +155,22 @@ void Configuration()
 
 void Resolution()
 {
-    // Resolution
-    uint8_t* ResolutionScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 74 ?? 41 ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? C5 ?? ?? ??");
-    if (ResolutionScanResult) {
-        spdlog::info("Resolution: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ResolutionScanResult - (uintptr_t)baseModule);
+    // Fix borderles/fullscreen resolution
+    uint8_t* ResolutionFixScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 74 ?? 41 ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? C5 ?? ?? ??");
+    if (ResolutionFixScanResult) {
+        spdlog::info("Resolution Fix: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ResolutionFixScanResult - (uintptr_t)baseModule);
         // Stop resolution for being scaled to 16:9 in borderless/fullscreen.
-        Memory::PatchBytes((uintptr_t)ResolutionScanResult + 0x3, "\xEB", 1);
-        spdlog::info("Resolution: Patched instruction.");
+        Memory::PatchBytes((uintptr_t)ResolutionFixScanResult + 0x3, "\xEB", 1);
+        spdlog::info("Resolution Fix: Patched instruction.");
     }
-    else if (!ResolutionScanResult) {
-        spdlog::error("Resolution: Pattern scan failed.");
+    else if (!ResolutionFixScanResult) {
+        spdlog::error("Resolution Fix: Pattern scan failed.");
     }  
 
     // Current Resolution
     uint8_t* CurrentResolutionScanResult = Memory::PatternScan(baseModule, "48 89 ?? ?? 8B ?? ?? ?? ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 8B ?? ?? ?? ?? ??");
     if (CurrentResolutionScanResult) {
-        spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CurrentResolutionScanResult - (uintptr_t)baseModule);
+        spdlog::info("Current Resolution: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CurrentResolutionScanResult - (uintptr_t)baseModule);
         static SafetyHookMid CurrentResolutionMidHook{};
         CurrentResolutionMidHook = safetyhook::create_mid(CurrentResolutionScanResult,
             [](SafetyHookContext& ctx) {
@@ -184,7 +187,7 @@ void Resolution()
             });
     }
     else if (!CurrentResolutionScanResult) {
-        spdlog::error("HUD Size: Pattern scan failed.");
+        spdlog::error("Current Resolution: Pattern scan failed.");
     }
 }
 
@@ -259,21 +262,23 @@ void HUD()
 
 void FOV()
 {
-    // FOV
-    uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 45 ?? ?? 48 8B ?? ?? ?? ?? ?? 48 85 ?? 74 ??");
-    if (FOVScanResult) {
-        spdlog::info("FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FOVScanResult - (uintptr_t)baseModule);
-        static SafetyHookMid FOVMidHook{};
-        FOVMidHook = safetyhook::create_mid(FOVScanResult,
-            [](SafetyHookContext& ctx) {
-                // Fix cropped FOV when at <16:9
-                if (fAspectRatio < fNativeAspect) {
-                    ctx.xmm11.f32[0] /= fAspectMultiplier;
-                }
-            });
-    }
-    else if (!FOVScanResult) {
-        spdlog::error("FOV: Pattern scan failed.");
+    if (bFixFOV) { 
+        // FOV
+        uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 45 ?? ?? 48 8B ?? ?? ?? ?? ?? 48 85 ?? 74 ??");
+        if (FOVScanResult) {
+            spdlog::info("FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FOVScanResult - (uintptr_t)baseModule);
+            static SafetyHookMid FOVMidHook{};
+            FOVMidHook = safetyhook::create_mid(FOVScanResult,
+                [](SafetyHookContext& ctx) {
+                    // Fix cropped FOV when at <16:9
+                    if (fAspectRatio < fNativeAspect) {
+                        ctx.xmm11.f32[0] /= fAspectMultiplier;
+                    }
+                });
+        }
+        else if (!FOVScanResult) {
+            spdlog::error("FOV: Pattern scan failed.");
+        }
     }
 }
 
