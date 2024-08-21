@@ -13,6 +13,7 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support a
 ### Ultrawide/Narrower
 - Remove pillarboxing/letterboxing in borderless/fullscreen.
 - Fixed HUD scaling.
+- Fixed FOV scaling at <16:9.
 
 ## Installation
 - Grab the latest release of FFXVIFix from [here.](https://github.com/Lyall/FFXVIFix/releases)
@@ -30,7 +31,6 @@ Please report any issues you see.
 This list will contain bugs which may or may not be fixed.
 
 - The last eikon fight in the demo has misaligned input.
-- <16:9 FOV is cropped horizontally.
 
 ## Screenshots
 | ![ezgif-4-40bff8440e](https://github.com/user-attachments/assets/74416ddf-43fe-4607-b608-c2e499cbe78b) |
