@@ -1,8 +1,8 @@
 # Final Fantasy XVI Fix
-[(https://www.patreon.com/Wintermance) [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W01UAI9)<br />
+[![Patreon-Button](https://github.com/user-attachments/assets/4f074cf5-3a94-4fe8-b915-35270f762b72)](https://www.patreon.com/Wintermance) [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W01UAI9)<br />
 [![Github All Releases](https://img.shields.io/github/downloads/Lyall/FFXVIFix/total.svg)](https://github.com/Lyall/FFXVIFix/releases)
 
-This is an fix for Final Fantasy XVI (demo) that adds ultrawide/narrow display support and more.
+This is a fix for Final Fantasy XVI (demo) that adds ultrawide/narrow display support and more.
 
 ## Features
 ### General
@@ -31,7 +31,7 @@ This list will contain bugs which may or may not be fixed.
 - <16:9 FOV is cropped horizontally.
 
 ## Screenshots
-|  |
+| ![ezgif-4-40bff8440e](https://github.com/user-attachments/assets/74416ddf-43fe-4607-b608-c2e499cbe78b) |
 |:--:|
 | Gameplay |
 
