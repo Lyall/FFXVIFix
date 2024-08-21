@@ -9,6 +9,7 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support a
 ## Features
 ### General
 - Disable 30FPS cap in cutscenes/photo mode.
+- Adjust gameplay FOV.
 
 ### Ultrawide/Narrower
 - Remove pillarboxing/letterboxing in borderless/fullscreen.
@@ -31,7 +32,7 @@ Please report any issues you see.
 This list will contain bugs which may or may not be fixed.
 
 - The last eikon fight has misaligned input. (Thanks for pointing this out Gumbie)
-- The game world is visible in the background during some FMVs playback.
+- The game world is visible in the background during some movie sequences.
 
 ## Screenshots
 | ![ezgif-4-40bff8440e](https://github.com/user-attachments/assets/74416ddf-43fe-4607-b608-c2e499cbe78b) |
