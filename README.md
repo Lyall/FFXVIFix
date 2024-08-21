@@ -11,7 +11,7 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support a
 - Disable 30FPS cap in cutscenes/photo mode.
 
 ### Ultrawide/Narrower
-- Remove pillarboxing/letterboxing.
+- Remove pillarboxing/letterboxing in borderless/fullscreen.
 - Fixed HUD scaling.
 
 ## Installation
