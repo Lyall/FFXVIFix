@@ -4,7 +4,7 @@
 
 This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support and more.
 
-### 🚩Currently this only supports the DEMO version.
+### 🚩Currently this fix only supports the DEMO version.
 
 ## Features
 ### General
