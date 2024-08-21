@@ -163,30 +163,17 @@ void Resolution()
     else if (!ResolutionScanResult) {
         spdlog::error("Resolution: Pattern scan failed.");
     }  
-}
 
-void HUD()
-{
-    // HUD size + grab current resolution
-    uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 44 ?? ?? 41 ?? ?? 48 8B ?? ?? 48 ?? ?? 74 ?? 48 ?? ?? 48 ?? ??");
-    if (HUDSizeScanResult) {
-        spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
-        static SafetyHookMid HUDSizeMidHook{};
-        HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x9,
+    // Current Resolution
+    uint8_t* CurrentResolutionScanResult = Memory::PatternScan(baseModule, "48 89 ?? ?? 8B ?? ?? ?? ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 8B ?? ?? ?? ?? ??");
+    if (CurrentResolutionScanResult) {
+        spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CurrentResolutionScanResult - (uintptr_t)baseModule);
+        static SafetyHookMid CurrentResolutionMidHook{};
+        CurrentResolutionMidHook = safetyhook::create_mid(CurrentResolutionScanResult,
             [](SafetyHookContext& ctx) {
-                if (bFixHUD) {
-                    // Make the hud size the same as the current resolution
-                    ctx.rsi = ctx.r13;
-                    ctx.rbp = ctx.r12;
-
-                    // Pillarboxing/letterboxing
-                    ctx.r14 = 0;
-                    ctx.r15 = 0;
-                }
-
                 // Get current resolution
-                int iResX = (int)ctx.r13;
-                int iResY = (int)ctx.r12;
+                int iResX = static_cast<int>(ctx.rax & 0xFFFFFFFF);
+                int iResY = static_cast<int>((ctx.rax >> 32) & 0xFFFFFFFF);
 
                 // Log resolution
                 if (iResX != iCurrentResX || iResY != iCurrentResY) {
@@ -196,11 +183,36 @@ void HUD()
                 }
             });
     }
-    else if (!HUDSizeScanResult) {
+    else if (!CurrentResolutionScanResult) {
         spdlog::error("HUD Size: Pattern scan failed.");
     }
+}
 
-    if (bFixHUD) {   
+void HUD()
+{
+    if (bFixHUD) {
+        // HUD size
+        uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 44 ?? ?? 41 ?? ?? 48 8B ?? ?? 48 ?? ?? 74 ?? 48 ?? ?? 48 ?? ??");
+        if (HUDSizeScanResult) {
+            spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
+            static SafetyHookMid HUDSizeMidHook{};
+            HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x9,
+                [](SafetyHookContext& ctx) {
+                    if (bFixHUD) {
+                        // Make the hud size the same as the current resolution
+                        ctx.rsi = ctx.r13;
+                        ctx.rbp = ctx.r12;
+
+                        // Pillarboxing/letterboxing
+                        ctx.r14 = 0;
+                        ctx.r15 = 0;
+                    }
+                });
+        }
+        else if (!HUDSizeScanResult) {
+            spdlog::error("HUD Size: Pattern scan failed.");
+        }
+
         // HUD pillarboxing
         uint8_t* HUDPillarboxingScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 48 85 ?? 74 ?? C5 ?? ?? ?? C5 ?? ?? ?? ?? ?? 44 ?? ?? 76 ??");
         if (HUDPillarboxingScanResult) {
@@ -245,6 +257,26 @@ void HUD()
     }
 }
 
+void FOV()
+{
+    // FOV
+    uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 45 ?? ?? 48 8B ?? ?? ?? ?? ?? 48 85 ?? 74 ??");
+    if (FOVScanResult) {
+        spdlog::info("FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FOVScanResult - (uintptr_t)baseModule);
+        static SafetyHookMid FOVMidHook{};
+        FOVMidHook = safetyhook::create_mid(FOVScanResult,
+            [](SafetyHookContext& ctx) {
+                // Fix cropped FOV when at <16:9
+                if (fAspectRatio < fNativeAspect) {
+                    ctx.xmm11.f32[0] /= fAspectMultiplier;
+                }
+            });
+    }
+    else if (!FOVScanResult) {
+        spdlog::error("FOV: Pattern scan failed.");
+    }
+}
+
 void Framerate()
 {
     if (bUncapFPS) {  
@@ -259,7 +291,6 @@ void Framerate()
             spdlog::error("Framerate Cap: Pattern scan failed.");
         }
     }
-
 }
 
 DWORD __stdcall Main(void*)
@@ -268,6 +299,7 @@ DWORD __stdcall Main(void*)
     Configuration();
     Resolution();
     HUD();
+    FOV();
     Framerate();
     return true;
 }
