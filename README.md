@@ -30,7 +30,6 @@ Please report any issues you see.
 This list will contain bugs which may or may not be fixed.
 
 - The last eikon fight in the demo has misaligned input.
-- <16:9 FOV is cropped horizontally.
 
 ## Screenshots
 | ![ezgif-4-40bff8440e](https://github.com/user-attachments/assets/74416ddf-43fe-4607-b608-c2e499cbe78b) |
