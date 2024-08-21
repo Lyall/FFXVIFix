@@ -10,7 +10,7 @@ HMODULE baseModule = GetModuleHandle(NULL);
 
 // Version
 std::string sFixName = "FFXVIFix";
-std::string sFixVer = "1.0.1";
+std::string sFixVer = "0.7.0";
 std::string sLogFile = sFixName + ".log";
 
 // Logger
