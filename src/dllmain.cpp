@@ -10,7 +10,7 @@ HMODULE baseModule = GetModuleHandle(NULL);
 
 // Version
 std::string sFixName = "FFXVIFix";
-std::string sFixVer = "0.7.1";
+std::string sFixVer = "0.7.2";
 std::string sLogFile = sFixName + ".log";
 
 // Logger
@@ -197,6 +197,20 @@ void Resolution()
     }
     else if (!CurrentResolutionScanResult) {
         spdlog::error("Current Resolution: Pattern scan failed.");
+    }
+
+    // FSR Framegen Fix
+    uint8_t* FSRFramegenAspectScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? ?? C5 ?? ?? ??");
+    if (FSRFramegenAspectScanResult) {
+        spdlog::info("FSR Framegen Aspect: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FSRFramegenAspectScanResult - (uintptr_t)baseModule);
+        static SafetyHookMid FSRFramegenAspectMidHook{};
+        FSRFramegenAspectMidHook = safetyhook::create_mid(FSRFramegenAspectScanResult + 0x8,
+            [](SafetyHookContext& ctx) {
+                ctx.xmm0.f32[0] = fAspectRatio;
+            });
+    }
+    else if (!FSRFramegenAspectScanResult) {
+        spdlog::error("FSR Framegen Aspect: Pattern scan failed.");
     }
 }
 
