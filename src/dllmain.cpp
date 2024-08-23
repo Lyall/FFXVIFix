@@ -200,11 +200,11 @@ void Resolution()
     }
 
     // FSR Framegen Fix
-    uint8_t* FSRFramegenAspectScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? ?? C5 ?? ?? ??");
+    uint8_t* FSRFramegenAspectScanResult = Memory::PatternScan(baseModule, "74 ?? 41 8B ?? ?? C5 FA ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? ??");
     if (FSRFramegenAspectScanResult) {
         spdlog::info("FSR Framegen Aspect: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FSRFramegenAspectScanResult - (uintptr_t)baseModule);
         static SafetyHookMid FSRFramegenAspectMidHook{};
-        FSRFramegenAspectMidHook = safetyhook::create_mid(FSRFramegenAspectScanResult + 0x8,
+        FSRFramegenAspectMidHook = safetyhook::create_mid(FSRFramegenAspectScanResult + 0xE,
             [](SafetyHookContext& ctx) {
                 ctx.xmm0.f32[0] = fAspectRatio;
             });
