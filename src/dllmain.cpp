@@ -29,7 +29,7 @@ bool bFixHUD;
 bool bFixFOV;
 float fAdditionalFOV;
 bool bUncapFPS;
-bool bForceFramegen;
+bool bCutsceneFramegen;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -141,7 +141,7 @@ void Configuration()
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
-    inipp::get_value(ini.sections["Frame Generation Always Active"], "Enabled", bForceFramegen);
+    inipp::get_value(ini.sections["Cutscene Frame Generation"], "Enabled", bCutsceneFramegen);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -153,7 +153,7 @@ void Configuration()
     }
     spdlog::info("Config Parse: fAdditionalFOV: {}", fAdditionalFOV);
     spdlog::info("Config Parse: bUncapFPS: {}", bUncapFPS);
-    spdlog::info("Config Parse: bForceFramegen: {}", bForceFramegen);
+    spdlog::info("Config Parse: bCutsceneFramegen: {}", bCutsceneFramegen);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
@@ -339,19 +339,16 @@ void Framerate()
         }
     }
 
-    if (bForceFramegen) {
-        // Enable frame generation all the time
-        uint8_t* FrameGenerationActiveScanResult = Memory::PatternScan(baseModule, "41 ?? ?? ?? 41 83 ?? ?? ?? ?? ?? FB 41 ?? ?? ?? ?? ?? ?? 8B ?? C1 ?? 0F");
-        if (FrameGenerationActiveScanResult) {
-            spdlog::info("Frame Generation Enable: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FrameGenerationActiveScanResult - (uintptr_t)baseModule);
-            static SafetyHookMid FrameGenerationActiveMidHook{};
-            FrameGenerationActiveMidHook = safetyhook::create_mid(FrameGenerationActiveScanResult,
-                [](SafetyHookContext& ctx) {
-                    ctx.rax = (ctx.rax & ~0xFF) | 0x00;
-                });
+    if (bCutsceneFramegen) {
+        // Enable frame generation during real-time cutscenes
+        uint8_t* CutsceneFramegenScanResult = Memory::PatternScan(baseModule, "41 ?? ?? 74 ?? 33 ?? 48 ?? ?? E8 ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? D1 ??");
+        if (CutsceneFramegenScanResult) {
+            spdlog::info("Cutscene Frame Generation: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CutsceneFramegenScanResult - (uintptr_t)baseModule);
+            Memory::PatchBytes((uintptr_t)CutsceneFramegenScanResult + 0x3, "\xEB", 1);
+            spdlog::info("Cutscene Frame Generation: Patched instruction.");
         }
-        else if (!FrameGenerationActiveScanResult) {
-            spdlog::error("Frame Generation Enable: Pattern scan failed.");
+        else if (!CutsceneFramegenScanResult) {
+            spdlog::error("Cutscene Frame Generation: Pattern scan failed.");
         }
     }
 }
