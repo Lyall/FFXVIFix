@@ -29,6 +29,7 @@ bool bFixHUD;
 bool bFixFOV;
 float fAdditionalFOV;
 bool bUncapFPS;
+bool bForceFramegen;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -140,6 +141,7 @@ void Configuration()
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
+    inipp::get_value(ini.sections["Frame Generation Always Active"], "Enabled", bForceFramegen);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -151,6 +153,7 @@ void Configuration()
     }
     spdlog::info("Config Parse: fAdditionalFOV: {}", fAdditionalFOV);
     spdlog::info("Config Parse: bUncapFPS: {}", bUncapFPS);
+    spdlog::info("Config Parse: bForceFramegen: {}", bForceFramegen);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
@@ -333,6 +336,22 @@ void Framerate()
         }
         else if (!FramerateCapScanResult) {
             spdlog::error("Framerate Cap: Pattern scan failed.");
+        }
+    }
+
+    if (bForceFramegen) {
+        // Enable frame generation all the time
+        uint8_t* FrameGenerationActiveScanResult = Memory::PatternScan(baseModule, "41 ?? ?? ?? 41 83 ?? ?? ?? ?? ?? FB 41 ?? ?? ?? ?? ?? ?? 8B ?? C1 ?? 0F");
+        if (FrameGenerationActiveScanResult) {
+            spdlog::info("Frame Generation Enable: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FrameGenerationActiveScanResult - (uintptr_t)baseModule);
+            static SafetyHookMid FrameGenerationActiveMidHook{};
+            FrameGenerationActiveMidHook = safetyhook::create_mid(FrameGenerationActiveScanResult,
+                [](SafetyHookContext& ctx) {
+                    ctx.rax = (ctx.rax & ~0xFF) | 0x00;
+                });
+        }
+        else if (!FrameGenerationActiveScanResult) {
+            spdlog::error("Frame Generation Enable: Pattern scan failed.");
         }
     }
 }
