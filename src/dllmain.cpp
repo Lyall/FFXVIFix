@@ -163,7 +163,7 @@ void Configuration()
     spdlog::info("Config Parse: bCutsceneFramegen: {}", bCutsceneFramegen);
     if (iJXLThreads > (int)std::thread::hardware_concurrency() || iJXLThreads < 1 ) {
         iJXLThreads = 1;
-        spdlog::warn("Config Parse: iJXLThreads value invalid, clamped to {}", iJXLThreads);
+        spdlog::warn("Config Parse: iJXLThreads value invalid, set to {}", iJXLThreads);
     }
     spdlog::info("Config Parse: iJXLThreads: {}", iJXLThreads);
     if (fJXLQuality < (float)1 || fJXLQuality >(float)100) {
@@ -378,7 +378,7 @@ float JxlEncoderDistanceFromQuality_hk(float quality)
 {
     quality = fJXLQuality;
     spdlog::info("JXL Tweaks: JxlEncoderDistanceFromQuality: Quality level = {}", quality);
-    return JxlEncoderDistanceFromQuality_sh.stdcall<float>(quality);
+    return JxlEncoderDistanceFromQuality_sh.fastcall<float>(quality);
 }
 
 SafetyHookInline JxlThreadParallelRunnerDefaultNumWorkerThreads_sh{};
