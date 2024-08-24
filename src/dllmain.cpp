@@ -31,6 +31,8 @@ bool bFixFOV;
 float fAdditionalFOV;
 bool bUncapFPS;
 bool bCutsceneFramegen;
+float fJXLQuality = 75.0f;
+int iJXLThreads = 1;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -45,6 +47,21 @@ float fHUDHeightOffset;
 // Variables
 int iCurrentResX;
 int iCurrentResY;
+
+SafetyHookInline JxlEncoderDistanceFromQuality_sh{};
+float JxlEncoderDistanceFromQuality_hk(float quality)
+{
+    quality = fJXLQuality;
+    spdlog::info("JXL Tweaks: JxlEncoderDistanceFromQuality: Quality level = {}", quality);
+    return JxlEncoderDistanceFromQuality_sh.stdcall<float>(quality);
+}
+
+SafetyHookInline JxlThreadParallelRunnerDefaultNumWorkerThreads_sh{};
+size_t JxlThreadParallelRunnerDefaultNumWorkerThreads_hk(void)
+{
+    spdlog::info("JXL Tweaks: JxlThreadParallelRunnerDefaultNumWorkerThreads: NumThreads = {}", iJXLThreads);
+    return iJXLThreads;
+}
 
 void CalculateAspectRatio(bool bLog)
 {
@@ -144,6 +161,8 @@ void Configuration()
     inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
     inipp::get_value(ini.sections["Cutscene Frame Generation"], "Enabled", bCutsceneFramegen);
+    inipp::get_value(ini.sections["JPEG XL Tweaks"], "NumThreads", iJXLThreads);
+    inipp::get_value(ini.sections["JPEG XL Tweaks"], "Quality", fJXLQuality);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -157,6 +176,16 @@ void Configuration()
     spdlog::info("Config Parse: fAdditionalFOV: {}", fAdditionalFOV);
     spdlog::info("Config Parse: bUncapFPS: {}", bUncapFPS);
     spdlog::info("Config Parse: bCutsceneFramegen: {}", bCutsceneFramegen);
+    if (iJXLThreads > (int)std::thread::hardware_concurrency() || iJXLThreads < 1 ) {
+        iJXLThreads = 1;
+        spdlog::warn("Config Parse: iJXLThreads value invalid, clamped to {}", iJXLThreads);
+    }
+    spdlog::info("Config Parse: iJXLThreads: {}", iJXLThreads);
+    if (fJXLQuality < (float)1 || fJXLQuality >(float)100) {
+        fJXLQuality = std::clamp(fJXLQuality, (float)1, (float)100);
+        spdlog::warn("Config Parse: fJXLQuality value invalid, clamped to {}", fJXLQuality);
+    }
+    spdlog::info("Config Parse: fJXLQuality: {}", fJXLQuality);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
@@ -358,6 +387,37 @@ void Framerate()
     }
 }
 
+void JXL()
+{
+    // JXL Tweaks
+    while (!GetModuleHandle(L"jxl.dll") || !GetModuleHandle(L"jxl_threads.dll")) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    HMODULE jxlLib = GetModuleHandle(L"jxl.dll");
+    HMODULE jxlThreadsLib = GetModuleHandle(L"jxl_threads.dll");
+
+    if (!jxlLib || !jxlThreadsLib) {
+        spdlog::info("JXL Tweaks: Failed to get module handle for JXL libraries.");
+        return;
+    }
+
+    auto setQuality_fn = GetProcAddress(jxlLib, "JxlEncoderDistanceFromQuality");
+    auto numThreads_fn = GetProcAddress(jxlThreadsLib, "JxlThreadParallelRunnerDefaultNumWorkerThreads");
+
+    if (!setQuality_fn || !numThreads_fn) {
+        spdlog::info("JXL Tweaks: Failed to get function addresses.");
+        return;
+    }
+
+    spdlog::info("JXL Tweaks: JxlEncoderDistanceFromQuality address = {:x}", (uintptr_t)setQuality_fn);
+    spdlog::info("JXL Tweaks: JxlThreadParallelRunnerDefaultNumWorkerThreads address = {:x}", (uintptr_t)numThreads_fn);
+
+    JxlEncoderDistanceFromQuality_sh = safetyhook::create_inline(setQuality_fn, reinterpret_cast<void*>(JxlEncoderDistanceFromQuality_hk));
+    JxlThreadParallelRunnerDefaultNumWorkerThreads_sh = safetyhook::create_inline(numThreads_fn, reinterpret_cast<void*>(JxlThreadParallelRunnerDefaultNumWorkerThreads_hk));
+    spdlog::info("JXL Tweaks: Hooked functions.");
+}
+
 DWORD __stdcall Main(void*)
 {
     Logging();
@@ -366,6 +426,7 @@ DWORD __stdcall Main(void*)
     HUD();
     FOV();
     Framerate();
+    JXL();
     return true;
 }
 
@@ -381,6 +442,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
         HANDLE mainHandle = CreateThread(NULL, 0, Main, 0, NULL, 0);
         if (mainHandle)
         {
+            SetThreadPriority(mainHandle, THREAD_PRIORITY_HIGHEST);
             CloseHandle(mainHandle);
         }
         break;
