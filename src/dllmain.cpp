@@ -48,21 +48,6 @@ float fHUDHeightOffset;
 int iCurrentResX;
 int iCurrentResY;
 
-SafetyHookInline JxlEncoderDistanceFromQuality_sh{};
-float JxlEncoderDistanceFromQuality_hk(float quality)
-{
-    quality = fJXLQuality;
-    spdlog::info("JXL Tweaks: JxlEncoderDistanceFromQuality: Quality level = {}", quality);
-    return JxlEncoderDistanceFromQuality_sh.stdcall<float>(quality);
-}
-
-SafetyHookInline JxlThreadParallelRunnerDefaultNumWorkerThreads_sh{};
-size_t JxlThreadParallelRunnerDefaultNumWorkerThreads_hk(void)
-{
-    spdlog::info("JXL Tweaks: JxlThreadParallelRunnerDefaultNumWorkerThreads: NumThreads = {}", iJXLThreads);
-    return iJXLThreads;
-}
-
 void CalculateAspectRatio(bool bLog)
 {
     // Calculate aspect ratio
@@ -387,6 +372,22 @@ void Framerate()
     }
 }
 
+// JXL Hooks
+SafetyHookInline JxlEncoderDistanceFromQuality_sh{};
+float JxlEncoderDistanceFromQuality_hk(float quality)
+{
+    quality = fJXLQuality;
+    spdlog::info("JXL Tweaks: JxlEncoderDistanceFromQuality: Quality level = {}", quality);
+    return JxlEncoderDistanceFromQuality_sh.stdcall<float>(quality);
+}
+
+SafetyHookInline JxlThreadParallelRunnerDefaultNumWorkerThreads_sh{};
+size_t JxlThreadParallelRunnerDefaultNumWorkerThreads_hk(void)
+{
+    spdlog::info("JXL Tweaks: JxlThreadParallelRunnerDefaultNumWorkerThreads: NumThreads = {}", iJXLThreads);
+    return iJXLThreads;
+}
+
 void JXL()
 {
     // JXL Tweaks
@@ -402,19 +403,19 @@ void JXL()
         return;
     }
 
-    auto setQuality_fn = GetProcAddress(jxlLib, "JxlEncoderDistanceFromQuality");
-    auto numThreads_fn = GetProcAddress(jxlThreadsLib, "JxlThreadParallelRunnerDefaultNumWorkerThreads");
+    FARPROC JxlEncoderDistanceFromQuality_fn = GetProcAddress(jxlLib, "JxlEncoderDistanceFromQuality");
+    FARPROC JxlThreadParallelRunnerDefaultNumWorkerThreads_fn = GetProcAddress(jxlThreadsLib, "JxlThreadParallelRunnerDefaultNumWorkerThreads");
 
-    if (!setQuality_fn || !numThreads_fn) {
+    if (!JxlEncoderDistanceFromQuality_fn || !JxlThreadParallelRunnerDefaultNumWorkerThreads_fn) {
         spdlog::info("JXL Tweaks: Failed to get function addresses.");
         return;
     }
 
-    spdlog::info("JXL Tweaks: JxlEncoderDistanceFromQuality address = {:x}", (uintptr_t)setQuality_fn);
-    spdlog::info("JXL Tweaks: JxlThreadParallelRunnerDefaultNumWorkerThreads address = {:x}", (uintptr_t)numThreads_fn);
+    spdlog::info("JXL Tweaks: JxlEncoderDistanceFromQuality address = {:x}", (uintptr_t)JxlEncoderDistanceFromQuality_fn);
+    spdlog::info("JXL Tweaks: JxlThreadParallelRunnerDefaultNumWorkerThreads address = {:x}", (uintptr_t)JxlThreadParallelRunnerDefaultNumWorkerThreads_fn);
 
-    JxlEncoderDistanceFromQuality_sh = safetyhook::create_inline(setQuality_fn, reinterpret_cast<void*>(JxlEncoderDistanceFromQuality_hk));
-    JxlThreadParallelRunnerDefaultNumWorkerThreads_sh = safetyhook::create_inline(numThreads_fn, reinterpret_cast<void*>(JxlThreadParallelRunnerDefaultNumWorkerThreads_hk));
+    JxlEncoderDistanceFromQuality_sh = safetyhook::create_inline(JxlEncoderDistanceFromQuality_fn, reinterpret_cast<void*>(JxlEncoderDistanceFromQuality_hk));
+    JxlThreadParallelRunnerDefaultNumWorkerThreads_sh = safetyhook::create_inline(JxlThreadParallelRunnerDefaultNumWorkerThreads_fn, reinterpret_cast<void*>(JxlThreadParallelRunnerDefaultNumWorkerThreads_hk));
     spdlog::info("JXL Tweaks: Hooked functions.");
 }
 
