@@ -26,7 +26,6 @@ std::pair DesktopDimensions = { 0,0 };
 // Ini variables
 bool bFixResolution;
 bool bFixHUD;
-bool bResizeHUD;
 bool bFixFOV;
 float fAdditionalFOV;
 bool bUncapFPS;
@@ -141,7 +140,6 @@ void Configuration()
     ini.strip_trailing_comments();
     inipp::get_value(ini.sections["Fix Resolution"], "Enabled", bFixResolution);
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
-    inipp::get_value(ini.sections["Fix HUD"], "Resize", bResizeHUD);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
@@ -152,7 +150,6 @@ void Configuration()
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
     spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
-    spdlog::info("Config Parse: bResizeHUD: {}", bResizeHUD);
     spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
     if (fAdditionalFOV < (float)-80 || fAdditionalFOV >(float)80) {
         fAdditionalFOV = std::clamp(fAdditionalFOV, (float)-80, (float)80);
@@ -244,15 +241,13 @@ void HUD()
             static SafetyHookMid HUDSizeMidHook{};
             HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x9,
                 [](SafetyHookContext& ctx) {
-                    if (!bResizeHUD) {
-                        // Make the hud size the same as the current resolution
-                        ctx.rsi = ctx.r13;
-                        ctx.rbp = ctx.r12;
+                    // Make the hud size the same as the current resolution
+                    ctx.rsi = ctx.r13;
+                    ctx.rbp = ctx.r12;
 
-                        // Pillarboxing/letterboxing
-                        ctx.r14 = 0;
-                        ctx.r15 = 0;
-                    }
+                    // Pillarboxing/letterboxing
+                    ctx.r14 = 0;
+                    ctx.r15 = 0;
                 });
         }
         else if (!HUDSizeScanResult) {
@@ -266,9 +261,7 @@ void HUD()
             static SafetyHookMid HUDPillarboxingMidHook{};
             HUDPillarboxingMidHook = safetyhook::create_mid(HUDPillarboxingScanResult,
                 [](SafetyHookContext& ctx) {
-                    if (!bResizeHUD) {
-                        ctx.xmm5.f32[0] = fAspectRatio;
-                    }                
+                    ctx.xmm5.f32[0] = fAspectRatio;
                 });
         }
         else if (!HUDPillarboxingScanResult) {
