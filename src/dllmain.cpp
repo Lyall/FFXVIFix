@@ -311,7 +311,7 @@ void HUD()
             EikonCursorHeightOffsetMidHook = safetyhook::create_mid(EikonCursorScanResult,
                 [](SafetyHookContext& ctx) {  
                     if (fAspectRatio < fNativeAspect) {
-                        ctx.xmm0.f32[0] += fHUDHeightOffset;
+                        ctx.xmm0.f32[0] += ((1920.00f / fAspectRatio) - 1080.00f) / 2.00f;
                     }
                 });
 
@@ -319,7 +319,7 @@ void HUD()
             EikonCursorWidthOffsetMidHook = safetyhook::create_mid(EikonCursorScanResult + 0x22,
                 [](SafetyHookContext& ctx) {
                     if (fAspectRatio > fNativeAspect) {
-                        ctx.xmm0.f32[0] += fHUDWidthOffset;
+                        ctx.xmm0.f32[0] += ((1080.00f * fAspectRatio) - 1920.00f) / 2.00f;
                     }
                 });
         }
