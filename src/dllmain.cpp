@@ -10,7 +10,7 @@ HMODULE baseModule = GetModuleHandle(NULL);
 
 // Version
 std::string sFixName = "FFXVIFix";
-std::string sFixVer = "0.7.2";
+std::string sFixVer = "0.7.3";
 std::string sLogFile = sFixName + ".log";
 
 // Logger
@@ -184,6 +184,7 @@ void Resolution()
         uint8_t* ResolutionFixScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 74 ?? 41 ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? C5 ?? ?? ??");
         if (ResolutionFixScanResult) {
             spdlog::info("Resolution Fix: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ResolutionFixScanResult - (uintptr_t)baseModule);
+
             // Stop resolution for being scaled to 16:9 in borderless/fullscreen.
             Memory::PatchBytes((uintptr_t)ResolutionFixScanResult + 0x3, "\xEB", 1);
             spdlog::info("Resolution Fix: Patched instruction.");
@@ -197,6 +198,7 @@ void Resolution()
     uint8_t* CurrentResolutionScanResult = Memory::PatternScan(baseModule, "48 89 ?? ?? 8B ?? ?? ?? ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 8B ?? ?? ?? ?? ??");
     if (CurrentResolutionScanResult) {
         spdlog::info("Current Resolution: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CurrentResolutionScanResult - (uintptr_t)baseModule);
+
         static SafetyHookMid CurrentResolutionMidHook{};
         CurrentResolutionMidHook = safetyhook::create_mid(CurrentResolutionScanResult,
             [](SafetyHookContext& ctx) {
@@ -220,6 +222,7 @@ void Resolution()
     uint8_t* FSRFramegenAspectScanResult = Memory::PatternScan(baseModule, "74 ?? 41 8B ?? ?? C5 FA ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? ??");
     if (FSRFramegenAspectScanResult) {
         spdlog::info("FSR Framegen Aspect: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FSRFramegenAspectScanResult - (uintptr_t)baseModule);
+
         static SafetyHookMid FSRFramegenAspectMidHook{};
         FSRFramegenAspectMidHook = safetyhook::create_mid(FSRFramegenAspectScanResult + 0xE,
             [](SafetyHookContext& ctx) {
@@ -238,6 +241,7 @@ void HUD()
         uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 44 ?? ?? 41 ?? ?? 48 8B ?? ?? 48 ?? ?? 74 ?? 48 ?? ?? 48 ?? ??");
         if (HUDSizeScanResult) {
             spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
+
             static SafetyHookMid HUDSizeMidHook{};
             HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x9,
                 [](SafetyHookContext& ctx) {
@@ -258,6 +262,7 @@ void HUD()
         uint8_t* HUDPillarboxingScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 48 85 ?? 74 ?? C5 ?? ?? ?? C5 ?? ?? ?? ?? ?? 44 ?? ?? 76 ??");
         if (HUDPillarboxingScanResult) {
             spdlog::info("HUD Pillarboxing: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDPillarboxingScanResult - (uintptr_t)baseModule);
+
             static SafetyHookMid HUDPillarboxingMidHook{};
             HUDPillarboxingMidHook = safetyhook::create_mid(HUDPillarboxingScanResult,
                 [](SafetyHookContext& ctx) {
@@ -272,6 +277,7 @@ void HUD()
         uint8_t* MoviesScanResult = Memory::PatternScan(baseModule, "C4 ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? C5 ?? ?? ?? 48 ?? ?? ?? 4C ?? ?? ?? C5 ?? ?? ?? 48 ?? ?? ??");
         if (MoviesScanResult) {
             spdlog::info("Movies: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MoviesScanResult - (uintptr_t)baseModule);
+
             static SafetyHookMid MoviesMidHook{};
             MoviesMidHook = safetyhook::create_mid(MoviesScanResult + 0x6,
                 [](SafetyHookContext& ctx) {
@@ -295,6 +301,31 @@ void HUD()
         else if (!MoviesScanResult) {
             spdlog::error("Movies: Pattern scan failed.");
         }
+
+        // Eikon Cursor
+        uint8_t* EikonCursorScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? C5 ?? ?? ?? ?? C5 ?? ?? ?? 8B ?? ?? 99 2B ?? D1 ?? C5 ?? ?? ??");
+        if (EikonCursorScanResult) {
+            spdlog::info("Eikon Cursor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)EikonCursorScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid EikonCursorHeightOffsetMidHook{};
+            EikonCursorHeightOffsetMidHook = safetyhook::create_mid(EikonCursorScanResult,
+                [](SafetyHookContext& ctx) {  
+                    if (fAspectRatio < fNativeAspect) {
+                        ctx.xmm0.f32[0] += fHUDHeightOffset;
+                    }
+                });
+
+            static SafetyHookMid EikonCursorWidthOffsetMidHook{};
+            EikonCursorWidthOffsetMidHook = safetyhook::create_mid(EikonCursorScanResult + 0x22,
+                [](SafetyHookContext& ctx) {
+                    if (fAspectRatio > fNativeAspect) {
+                        ctx.xmm0.f32[0] += fHUDWidthOffset;
+                    }
+                });
+        }
+        else if (!EikonCursorScanResult) {
+            spdlog::error("Eikon Cursor: Pattern scan failed.");
+        }
     }
 }
 
@@ -305,6 +336,7 @@ void FOV()
         uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 45 ?? ?? 48 8B ?? ?? ?? ?? ?? 48 85 ?? 74 ??");
         if (FOVScanResult) {
             spdlog::info("FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FOVScanResult - (uintptr_t)baseModule);
+
             static SafetyHookMid FOVMidHook{};
             FOVMidHook = safetyhook::create_mid(FOVScanResult,
                 [](SafetyHookContext& ctx) {
@@ -324,6 +356,7 @@ void FOV()
         uint8_t* GameplayFOVScanResult = Memory::PatternScan(baseModule, "48 8D ?? ?? ?? ?? ?? C3 C5 FA ?? ?? ?? ?? ?? 00 C5 FA ?? ?? ?? ?? ?? ?? C5 F2 ?? ?? ?? ?? ?? ?? C3");
         if (GameplayFOVScanResult) {
             spdlog::info("Gameplay FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayFOVScanResult - (uintptr_t)baseModule);
+
             static SafetyHookMid GameplayFOVMidHook{};
             GameplayFOVMidHook = safetyhook::create_mid(GameplayFOVScanResult + 0x10,
                 [](SafetyHookContext& ctx) {
