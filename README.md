@@ -33,9 +33,7 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support a
 Please report any issues you see.
 This list will contain bugs which may or may not be fixed.
 
-- The last eikon fight has misaligned input. (Thanks for pointing this out Gumbie)
 - The game world is visible in the background during some movie sequences.
-- The HUD "Resize" option will cause some visual errors.
 
 ## Screenshots
 | ![ezgif-4-40bff8440e](https://github.com/user-attachments/assets/74416ddf-43fe-4607-b608-c2e499cbe78b) |
