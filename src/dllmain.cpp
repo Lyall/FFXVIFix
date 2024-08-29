@@ -31,6 +31,7 @@ bool bFixFOV;
 float fAdditionalFOV;
 bool bUncapFPS;
 bool bCutsceneFramegen;
+bool bMotionBlurFramegen;
 float fJXLQuality = 75.0f;
 int iJXLThreads = 1;
 
@@ -148,6 +149,7 @@ void Configuration()
     inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
     inipp::get_value(ini.sections["Cutscene Frame Generation"], "Enabled", bCutsceneFramegen);
+    inipp::get_value(ini.sections["Motion Blur + Frame Generation"], "Enabled", bMotionBlurFramegen);
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "NumThreads", iJXLThreads);
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "Quality", fJXLQuality);
 
@@ -163,6 +165,7 @@ void Configuration()
     spdlog::info("Config Parse: fAdditionalFOV: {}", fAdditionalFOV);
     spdlog::info("Config Parse: bUncapFPS: {}", bUncapFPS);
     spdlog::info("Config Parse: bCutsceneFramegen: {}", bCutsceneFramegen);
+    spdlog::info("Config Parse: bMotionBlurFramegen: {}", bMotionBlurFramegen);
     if (iJXLThreads > (int)std::thread::hardware_concurrency() || iJXLThreads < 1 ) {
         iJXLThreads = 1;
         spdlog::warn("Config Parse: iJXLThreads value invalid, set to {}", iJXLThreads);
@@ -510,22 +513,24 @@ size_t JxlThreadParallelRunnerDefaultNumWorkerThreads_hk(void)
 
 void Misc()
 {
-    // Motion blur + frame generation
-    uint8_t* FrameGenMotionBlurLockoutScanResult = Memory::PatternScan(baseModule, "0F 85 ?? ?? ?? ?? 44 ?? ?? ?? ?? ?? ?? 44 88 ?? ?? ?? C6 ?? ?? ?? ?? 44 88 ?? ?? ?? E9 ?? ?? ?? ??");
-    uint8_t* FrameGenMotionBlurLogicScanResult = Memory::PatternScan(baseModule, "74 ?? C4 ?? ?? ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? C4 ?? ?? ?? ?? ?? ?? ?? ?? EB ?? 41 ?? ?? ?? ?? ?? ?? 74 ??");
-    if (FrameGenMotionBlurLockoutScanResult && FrameGenMotionBlurLogicScanResult) {
-        spdlog::info("Frame Generation Motion Blur: Menu Lock: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FrameGenMotionBlurLockoutScanResult - (uintptr_t)baseModule);
-        spdlog::info("Frame Generation Motion Blur: Logic: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FrameGenMotionBlurLogicScanResult - (uintptr_t)baseModule);
+    if (bMotionBlurFramegen) {
+        // Motion blur + frame generation
+        uint8_t* FrameGenMotionBlurLockoutScanResult = Memory::PatternScan(baseModule, "0F 85 ?? ?? ?? ?? 44 ?? ?? ?? ?? ?? ?? 44 88 ?? ?? ?? C6 ?? ?? ?? ?? 44 88 ?? ?? ?? E9 ?? ?? ?? ??");
+        uint8_t* FrameGenMotionBlurLogicScanResult = Memory::PatternScan(baseModule, "74 ?? C4 ?? ?? ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? C4 ?? ?? ?? ?? ?? ?? ?? ?? EB ?? 41 ?? ?? ?? ?? ?? ?? 74 ??");
+        if (FrameGenMotionBlurLockoutScanResult && FrameGenMotionBlurLogicScanResult) {
+            spdlog::info("Frame Generation Motion Blur: Menu Lock: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FrameGenMotionBlurLockoutScanResult - (uintptr_t)baseModule);
+            spdlog::info("Frame Generation Motion Blur: Logic: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FrameGenMotionBlurLogicScanResult - (uintptr_t)baseModule);
 
-        // Stop the game menu from hiding motion blur option when frame generation is enabled.
-        Memory::PatchBytes((uintptr_t)FrameGenMotionBlurLockoutScanResult, "\x90\x90\x90\x90\x90\x90", 6);
-        // Stop the game from setting the motion blur float to 0 when frame generation is enabled.
-        Memory::PatchBytes((uintptr_t)FrameGenMotionBlurLogicScanResult, "\xEB", 1);
+            // Stop the game menu from hiding motion blur option when frame generation is enabled.
+            Memory::PatchBytes((uintptr_t)FrameGenMotionBlurLockoutScanResult, "\x90\x90\x90\x90\x90\x90", 6);
+            // Stop the game from setting the motion blur float to 0 when frame generation is enabled.
+            Memory::PatchBytes((uintptr_t)FrameGenMotionBlurLogicScanResult, "\xEB", 1);
 
-        spdlog::info("Frame Generation Motion Blur: Patched instructions.");
-    }
-    else if (!FrameGenMotionBlurLockoutScanResult || !FrameGenMotionBlurLogicScanResult) {
-        spdlog::error("Frame Generation Motion Blur: Pattern scan failed.");
+            spdlog::info("Frame Generation Motion Blur: Patched instructions.");
+        }
+        else if (!FrameGenMotionBlurLockoutScanResult || !FrameGenMotionBlurLogicScanResult) {
+            spdlog::error("Frame Generation Motion Blur: Pattern scan failed.");
+        }
     }
 }
 
