@@ -26,6 +26,7 @@ std::pair DesktopDimensions = { 0,0 };
 // Ini variables
 bool bFixResolution;
 bool bFixHUD;
+int iHUDSize;
 bool bFixFOV;
 float fAdditionalFOV;
 bool bUncapFPS;
@@ -140,6 +141,7 @@ void Configuration()
     ini.strip_trailing_comments();
     inipp::get_value(ini.sections["Fix Resolution"], "Enabled", bFixResolution);
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
+    inipp::get_value(ini.sections["Fix HUD"], "HUDSize", iHUDSize);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
@@ -150,6 +152,7 @@ void Configuration()
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
     spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
+    spdlog::info("Config Parse: iHUDSize: {}", iHUDSize);
     spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
     if (fAdditionalFOV < (float)-80 || fAdditionalFOV >(float)80) {
         fAdditionalFOV = std::clamp(fAdditionalFOV, (float)-80, (float)80);
@@ -271,6 +274,74 @@ void HUD()
         }
         else if (!HUDPillarboxingScanResult) {
             spdlog::error("HUD Pillarboxing: Pattern scan failed.");
+        }
+
+        // Gameplay HUD Width
+        uint8_t* GameplayHUDWidthScanResult = Memory::PatternScan(baseModule, "C5 F2 ?? ?? ?? ?? ?? ?? 8B ?? 99 2B ?? D1 ?? C5 ?? ?? ?? C5 ?? ?? ??");
+        if (GameplayHUDWidthScanResult) {
+            spdlog::info("Gameplay HUD Width: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayHUDWidthScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid GameplayHUDWidthMidHook{};
+            GameplayHUDWidthMidHook = safetyhook::create_mid(GameplayHUDWidthScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (ctx.xmm2.f32[0] > fNativeAspect) {
+                        switch (iHUDSize) {
+                        case 0:                       
+                            break;                      // Automatic
+                        case 1:
+                            ctx.xmm1.f32[0] = 1440.00f; // 4:3 (1.333~)
+                            break;
+                        case 2:
+                            ctx.xmm1.f32[0] = 1728.00f; // 16:10 (1.600~)
+                            break;
+                        case 3:
+                            ctx.xmm1.f32[0] = 1920.00f; // 16:9 (1.778~)
+                            break;
+                        case 4:
+                            ctx.xmm1.f32[0] = 2520.00f; // 21:9 (2.333~)
+                            break;
+                        default:                              
+                            break;                      // Automatic
+                        }
+                    }
+                });
+        }
+        else if (!GameplayHUDWidthScanResult) {
+            spdlog::error("Gameplay HUD Width: Pattern scan failed.");
+        }
+
+        // Gameplay HUD Height
+        uint8_t* GameplayHUDHeightScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 2B ?? D1 ?? C5 ?? ?? ?? C5 ?? ?? ?? C5 ?? ?? ?? E8 ?? ?? ?? ??");
+        if (GameplayHUDHeightScanResult) {
+            spdlog::info("Gameplay HUD Height: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayHUDHeightScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid GameplayHUDHeightMidHook{};
+            GameplayHUDHeightMidHook = safetyhook::create_mid(GameplayHUDHeightScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (ctx.xmm2.f32[0] < fNativeAspect) {
+                        switch (iHUDSize) {
+                        case 0:
+                            break;                      // Automatic
+                        case 1:
+                            ctx.xmm0.f32[0] = 1440.00f; // 4:3 (1.333~)
+                            break;
+                        case 2:
+                            ctx.xmm0.f32[0] = 1200.00f; // 16:10 (1.600~)
+                            break;
+                        case 3:
+                            ctx.xmm0.f32[0] = 1080.00f; // 16:9 (1.778~)
+                            break;
+                        case 4:
+                            ctx.xmm0.f32[0] = 823.00f; // 21:9 (2.333~)
+                            break;
+                        default:
+                            break;                      // Automatic
+                        }
+                    }
+                });
+        }
+        else if (!GameplayHUDHeightScanResult) {
+            spdlog::error("Gameplay HUD Height: Pattern scan failed.");
         }
 
         // Movies
