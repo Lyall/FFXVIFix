@@ -237,6 +237,25 @@ void Resolution()
     else if (!FSRFramegenAspectScanResult) {
         spdlog::error("FSR Framegen Aspect: Pattern scan failed.");
     }
+
+    // Vignette
+    uint8_t* VignetteStrengthScanResult = Memory::PatternScan(baseModule, "41 ?? ?? ?? 00 00 80 3F C4 ?? ?? ?? ?? C4 ?? ?? ?? ?? C5 ?? ?? ??");
+    if (VignetteStrengthScanResult) {
+        spdlog::info("Vignette Strength: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)VignetteStrengthScanResult - (uintptr_t)baseModule);
+
+        static SafetyHookMid VignetteStrengthMidHook{};
+        VignetteStrengthMidHook = safetyhook::create_mid(VignetteStrengthScanResult + 0x8,
+            [](SafetyHookContext& ctx) {
+                if (fAspectRatio > fNativeAspect) {
+                    if (ctx.r15 + 0x6C) {
+                        *reinterpret_cast<float*>(ctx.r15 + 0x6C) = 1.00f / fAspectMultiplier;
+                    }
+                }
+            });
+    }
+    else if (!VignetteStrengthScanResult) {
+        spdlog::error("Vignette Strength: Pattern scan failed.");
+    }
 }
 
 void HUD()
@@ -499,7 +518,7 @@ void Misc()
         spdlog::info("Frame Generation Motion Blur: Logic: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FrameGenMotionBlurLogicScanResult - (uintptr_t)baseModule);
 
         // Stop the game menu from hiding motion blur option when frame generation is enabled.
-        Memory::PatchBytes((uintptr_t)FrameGenMotionBlurLockoutScanResult, "\x00\x00\x00\x00\x00\x00", 6);
+        Memory::PatchBytes((uintptr_t)FrameGenMotionBlurLockoutScanResult, "\x90\x90\x90\x90\x90\x90", 6);
         // Stop the game from setting the motion blur float to 0 when frame generation is enabled.
         Memory::PatchBytes((uintptr_t)FrameGenMotionBlurLogicScanResult, "\xEB", 1);
 
