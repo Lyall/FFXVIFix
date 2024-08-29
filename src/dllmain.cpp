@@ -489,6 +489,27 @@ size_t JxlThreadParallelRunnerDefaultNumWorkerThreads_hk(void)
     return iJXLThreads;
 }
 
+void Misc()
+{
+    // Motion blur + frame generation
+    uint8_t* FrameGenMotionBlurLockoutScanResult = Memory::PatternScan(baseModule, "0F 85 ?? ?? ?? ?? 44 ?? ?? ?? ?? ?? ?? 44 88 ?? ?? ?? C6 ?? ?? ?? ?? 44 88 ?? ?? ?? E9 ?? ?? ?? ??");
+    uint8_t* FrameGenMotionBlurLogicScanResult = Memory::PatternScan(baseModule, "74 ?? C4 ?? ?? ?? ?? ?? ?? ?? ?? E8 ?? ?? ?? ?? C4 ?? ?? ?? ?? ?? ?? ?? ?? EB ?? 41 ?? ?? ?? ?? ?? ?? 74 ??");
+    if (FrameGenMotionBlurLockoutScanResult && FrameGenMotionBlurLogicScanResult) {
+        spdlog::info("Frame Generation Motion Blur: Menu Lock: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FrameGenMotionBlurLockoutScanResult - (uintptr_t)baseModule);
+        spdlog::info("Frame Generation Motion Blur: Logic: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FrameGenMotionBlurLogicScanResult - (uintptr_t)baseModule);
+
+        // Stop the game menu from hiding motion blur option when frame generation is enabled.
+        Memory::PatchBytes((uintptr_t)FrameGenMotionBlurLockoutScanResult, "\x00\x00\x00\x00\x00\x00", 6);
+        // Stop the game from setting the motion blur float to 0 when frame generation is enabled.
+        Memory::PatchBytes((uintptr_t)FrameGenMotionBlurLogicScanResult, "\xEB", 1);
+
+        spdlog::info("Frame Generation Motion Blur: Patched instructions.");
+    }
+    else if (!FrameGenMotionBlurLockoutScanResult || !FrameGenMotionBlurLogicScanResult) {
+        spdlog::error("Frame Generation Motion Blur: Pattern scan failed.");
+    }
+}
+
 void JXL()
 {
     // JXL Tweaks
@@ -528,6 +549,7 @@ DWORD __stdcall Main(void*)
     HUD();
     FOV();
     Framerate();
+    Misc();
     JXL();
     return true;
 }
