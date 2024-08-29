@@ -47,6 +47,8 @@ float fHUDHeightOffset;
 // Variables
 int iCurrentResX;
 int iCurrentResY;
+float fEikonCursorWidthOffset;
+float fEikonCursorHeightOffset;
 
 void CalculateAspectRatio(bool bLog)
 {
@@ -303,6 +305,7 @@ void HUD()
                         default:                              
                             break;                      // Automatic
                         }
+                        fEikonCursorWidthOffset = (ctx.xmm1.f32[0] - 1920.00f) / 2.00f;
                     }
                 });
         }
@@ -337,11 +340,37 @@ void HUD()
                         default:
                             break;                      // Automatic
                         }
+                        fEikonCursorHeightOffset = (ctx.xmm0.f32[0] - 1080.00f) / 2.00f;
                     }
                 });
         }
         else if (!GameplayHUDHeightScanResult) {
             spdlog::error("Gameplay HUD Height: Pattern scan failed.");
+        }
+
+        // Eikon Cursor
+        uint8_t* EikonCursorScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? C5 ?? ?? ?? ?? C5 ?? ?? ?? 8B ?? ?? 99 2B ?? D1 ?? C5 ?? ?? ??");
+        if (EikonCursorScanResult) {
+            spdlog::info("Eikon Cursor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)EikonCursorScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid EikonCursorWidthOffsetMidHook{};
+            EikonCursorWidthOffsetMidHook = safetyhook::create_mid(EikonCursorScanResult + 0x22,
+                [](SafetyHookContext& ctx) {
+                    if (fAspectRatio > fNativeAspect) {
+                        ctx.xmm0.f32[0] += fEikonCursorWidthOffset;
+                    }
+                });
+
+            static SafetyHookMid EikonCursorHeightOffsetMidHook{};
+            EikonCursorHeightOffsetMidHook = safetyhook::create_mid(EikonCursorScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (fAspectRatio < fNativeAspect) {
+                        ctx.xmm0.f32[0] += fEikonCursorHeightOffset;
+                    }
+                });
+        }
+        else if (!EikonCursorScanResult) {
+            spdlog::error("Eikon Cursor: Pattern scan failed.");
         }
 
         // Movies
@@ -371,31 +400,6 @@ void HUD()
         }
         else if (!MoviesScanResult) {
             spdlog::error("Movies: Pattern scan failed.");
-        }
-
-        // Eikon Cursor
-        uint8_t* EikonCursorScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? C5 ?? ?? ?? ?? C5 ?? ?? ?? 8B ?? ?? 99 2B ?? D1 ?? C5 ?? ?? ??");
-        if (EikonCursorScanResult) {
-            spdlog::info("Eikon Cursor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)EikonCursorScanResult - (uintptr_t)baseModule);
-
-            static SafetyHookMid EikonCursorHeightOffsetMidHook{};
-            EikonCursorHeightOffsetMidHook = safetyhook::create_mid(EikonCursorScanResult,
-                [](SafetyHookContext& ctx) {  
-                    if (fAspectRatio < fNativeAspect) {
-                        ctx.xmm0.f32[0] += ((1920.00f / fAspectRatio) - 1080.00f) / 2.00f;
-                    }
-                });
-
-            static SafetyHookMid EikonCursorWidthOffsetMidHook{};
-            EikonCursorWidthOffsetMidHook = safetyhook::create_mid(EikonCursorScanResult + 0x22,
-                [](SafetyHookContext& ctx) {
-                    if (fAspectRatio > fNativeAspect) {
-                        ctx.xmm0.f32[0] += ((1080.00f * fAspectRatio) - 1920.00f) / 2.00f;
-                    }
-                });
-        }
-        else if (!EikonCursorScanResult) {
-            spdlog::error("Eikon Cursor: Pattern scan failed.");
         }
     }
 }
