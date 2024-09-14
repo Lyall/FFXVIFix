@@ -10,7 +10,7 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support, 
 ### General
 - Disable 30FPS cap in cutscenes/photo mode.
 - Adjust gameplay FOV.
-- Allow frame generation in cutscens.
+- Allow frame generation in cutscenes.
 - JXL screenshot quality option and fixes hitching while taking screenshot.
 
 ### Ultrawide/Narrower
