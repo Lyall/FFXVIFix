@@ -33,7 +33,7 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support, 
 Please report any issues you see.
 This list will contain bugs which may or may not be fixed.
 
-- The game world is visible in the background during some movie sequences.
+- At ultrawide/narrower the game world is visible in the background during some movie sequences.
 
 ## Screenshots
 | ![ezgif-4-40bff8440e](https://github.com/user-attachments/assets/74416ddf-43fe-4607-b608-c2e499cbe78b) |
