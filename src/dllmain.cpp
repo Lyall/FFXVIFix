@@ -51,6 +51,7 @@ int iCurrentResX;
 int iCurrentResY;
 float fEikonCursorWidthOffset;
 float fEikonCursorHeightOffset;
+bool bIsDemoVersion = false;
 
 void CalculateAspectRatio(bool bLog)
 {
@@ -188,6 +189,16 @@ void Configuration()
     CalculateAspectRatio(false);
 }
 
+void DetectVersion()
+{
+    if (sExeName == "ffxvi_demo.exe") {
+        bIsDemoVersion = true;
+    }
+    else {
+        bIsDemoVersion = false;
+    }
+}
+
 void Resolution()
 {
     if (bFixResolution) {
@@ -196,12 +207,24 @@ void Resolution()
         if (ResolutionFixScanResult) {
             spdlog::info("Resolution Fix: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ResolutionFixScanResult - (uintptr_t)baseModule);
 
-            static SafetyHookMid ResolutionFixMidHook{};
-            ResolutionFixMidHook = safetyhook::create_mid(ResolutionFixScanResult + 0x5,
-                [](SafetyHookContext& ctx) {
-                    ctx.rdi = ctx.r8;
-                    ctx.rsi = ctx.r9;
-                });
+            if (!bIsDemoVersion) {
+                // Full Game
+                static SafetyHookMid ResolutionFixMidHook{};
+                ResolutionFixMidHook = safetyhook::create_mid(ResolutionFixScanResult + 0x5,
+                    [](SafetyHookContext& ctx) {
+                        ctx.rdi = ctx.r8;
+                        ctx.rsi = ctx.r9;
+                    });
+            }
+            else {            
+                // Demo
+                static SafetyHookMid ResolutionFixMidHook{};
+                ResolutionFixMidHook = safetyhook::create_mid(ResolutionFixScanResult + 0x5,
+                    [](SafetyHookContext& ctx) {
+                        ctx.r15 = ctx.r8;
+                        ctx.r12 = ctx.r9;
+                    });
+            }
         }
         else if (!ResolutionFixScanResult) {
             spdlog::error("Resolution Fix: Pattern scan failed.");
@@ -271,24 +294,49 @@ void HUD()
 {
     if (bFixHUD) {
         // HUD size
-        uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "D1 ?? 89 ?? ?? ?? 48 8B ?? ?? 48 85 ?? 74 ?? 48 8B ?? 48 8B ?? FF 50 ?? 48 8B ?? ??");
-        if (HUDSizeScanResult) {
-            spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
+        if (!bIsDemoVersion) {
+            // Full Game
+            uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "D1 ?? 89 ?? ?? ?? 48 8B ?? ?? 48 85 ?? 74 ?? 48 8B ?? 48 8B ?? FF 50 ?? 48 8B ?? ??");
+            if (HUDSizeScanResult) {
+                spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
 
-            static SafetyHookMid HUDSizeMidHook{};
-            HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x6,
-                [](SafetyHookContext& ctx) {
-                    // Make the hud size the same as the current resolution
-                    ctx.r12 = ctx.rdi;
-                    ctx.r15 = ctx.rbp;
+                static SafetyHookMid HUDSizeMidHook{};
+                HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x6,
+                    [](SafetyHookContext& ctx) {
+                        // Make the hud size the same as the current resolution
+                        ctx.r12 = ctx.rdi;
+                        ctx.r15 = ctx.rbp;
 
-                    // Pillarboxing/letterboxing
-                    ctx.r13 = 0;
-                    ctx.rax = 0;
-                });
+                        // Pillarboxing/letterboxing
+                        ctx.r13 = 0;
+                        ctx.rax = 0;
+                    });
+            }
+            else if (!HUDSizeScanResult) {
+                spdlog::error("HUD Size: Pattern scan failed.");
+            }
         }
-        else if (!HUDSizeScanResult) {
-            spdlog::error("HUD Size: Pattern scan failed.");
+        else {
+            // Demo
+            uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 44 ?? ?? 41 ?? ?? 48 8B ?? ?? 48 ?? ?? 74 ?? 48 ?? ?? 48 ?? ??");
+            if (HUDSizeScanResult) {
+                spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
+
+                static SafetyHookMid HUDSizeMidHook{};
+                HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x9,
+                    [](SafetyHookContext& ctx) {
+                        // Make the hud size the same as the current resolution
+                        ctx.rsi = ctx.r13;
+                        ctx.rbp = ctx.r12;
+
+                        // Pillarboxing/letterboxing
+                        ctx.r14 = 0;
+                        ctx.r15 = 0;
+                    });
+            }
+            else if (!HUDSizeScanResult) {
+                spdlog::error("HUD Size: Pattern scan failed.");
+            }
         }
 
         // HUD pillarboxing
@@ -588,6 +636,7 @@ DWORD __stdcall Main(void*)
 {
     Logging();
     Configuration();
+    DetectVersion();
     Resolution();
     HUD();
     FOV();
