@@ -4,8 +4,6 @@
 
 This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support, uncapped framerate in cutscenes and more.
 
-### 🚩Currently this fix only supports the DEMO version.
-
 ## Features
 ### General
 - Disable 30FPS cap in cutscenes/photo mode.
@@ -20,7 +18,7 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support, 
 
 ## Installation
 - Grab the latest release of FFXVIFix from [here.](https://github.com/Lyall/FFXVIFix/releases)
-- Extract the contents of the release zip in to the the game folder. e.g. ("**steamapps\common\FINAL FANTASY XVI DEMO**" for Steam).
+- Extract the contents of the release zip in to the the game folder. e.g. ("**steamapps\common\FINAL FANTASY XVI**" for Steam).
 
 ### Steam Deck/Linux Additional Instructions
 🚩**You do not need to do this if you are using Windows!**
