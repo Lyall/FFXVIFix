@@ -10,7 +10,7 @@ HMODULE baseModule = GetModuleHandle(NULL);
 
 // Version
 std::string sFixName = "FFXVIFix";
-std::string sFixVer = "0.7.4";
+std::string sFixVer = "0.7.5";
 std::string sLogFile = sFixName + ".log";
 
 // Logger
@@ -188,14 +188,20 @@ void Configuration()
 void Resolution()
 {
     if (bFixResolution) {
-        // Fix borderles/fullscreen resolution
-        uint8_t* ResolutionFixScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 74 ?? 41 ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ?? C5 ?? ?? ??");
+        // Fix borderless/fullscreen resolution
+        uint8_t* ResolutionFixScanResult = Memory::PatternScan(baseModule, "C4 ?? ?? ?? ?? 48 8B ?? ?? ?? ?? ?? ?? 8D ?? ?? ?? ?? ?? 48 ?? ?? 05 48 8D ?? ?? ?? ?? ?? ?? ?? ??");
         if (ResolutionFixScanResult) {
             spdlog::info("Resolution Fix: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ResolutionFixScanResult - (uintptr_t)baseModule);
 
-            // Stop resolution for being scaled to 16:9 in borderless/fullscreen.
-            Memory::PatchBytes((uintptr_t)ResolutionFixScanResult + 0x3, "\xEB", 1);
-            spdlog::info("Resolution Fix: Patched instruction.");
+            static SafetyHookMid ResolutionFixMidHook{};
+            ResolutionFixMidHook = safetyhook::create_mid(ResolutionFixScanResult + 0x5,
+                [](SafetyHookContext& ctx) {
+                    // Demo 
+                    // ctx.r15 = ctx.r8;
+                    // ctx.r12 = ctx.r9;
+                    ctx.rdi = ctx.r8;
+                    ctx.rsi = ctx.r9;
+                });
         }
         else if (!ResolutionFixScanResult) {
             spdlog::error("Resolution Fix: Pattern scan failed.");
@@ -242,12 +248,12 @@ void Resolution()
     }
 
     // Vignette
-    uint8_t* VignetteStrengthScanResult = Memory::PatternScan(baseModule, "41 ?? ?? ?? 00 00 80 3F C4 ?? ?? ?? ?? C4 ?? ?? ?? ?? C5 ?? ?? ??");
+    uint8_t* VignetteStrengthScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? C5 ?? ?? ?? ?? 41 ?? ?? ?? 00 00 80 3F");
     if (VignetteStrengthScanResult) {
         spdlog::info("Vignette Strength: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)VignetteStrengthScanResult - (uintptr_t)baseModule);
 
         static SafetyHookMid VignetteStrengthMidHook{};
-        VignetteStrengthMidHook = safetyhook::create_mid(VignetteStrengthScanResult + 0x8,
+        VignetteStrengthMidHook = safetyhook::create_mid(VignetteStrengthScanResult + 0x12,
             [](SafetyHookContext& ctx) {
                 if (fAspectRatio > fNativeAspect) {
                     if (ctx.r15 + 0x6C) {
@@ -265,20 +271,20 @@ void HUD()
 {
     if (bFixHUD) {
         // HUD size
-        uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 44 ?? ?? 41 ?? ?? 48 8B ?? ?? 48 ?? ?? 74 ?? 48 ?? ?? 48 ?? ??");
+        uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "D1 ?? 89 ?? ?? ?? 48 8B ?? ?? 48 85 ?? 74 ?? 48 8B ?? 48 8B ?? FF 50 ?? 48 8B ?? ??");
         if (HUDSizeScanResult) {
             spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid HUDSizeMidHook{};
-            HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x9,
+            HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x6,
                 [](SafetyHookContext& ctx) {
                     // Make the hud size the same as the current resolution
-                    ctx.rsi = ctx.r13;
-                    ctx.rbp = ctx.r12;
+                    ctx.r12 = ctx.rdi;
+                    ctx.r15 = ctx.rbp;
 
                     // Pillarboxing/letterboxing
-                    ctx.r14 = 0;
-                    ctx.r15 = 0;
+                    ctx.r13 = 0;
+                    ctx.rax = 0;
                 });
         }
         else if (!HUDSizeScanResult) {
