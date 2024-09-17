@@ -10,7 +10,7 @@ HMODULE baseModule = GetModuleHandle(NULL);
 
 // Version
 std::string sFixName = "FFXVIFix";
-std::string sFixVer = "0.7.5";
+std::string sFixVer = "0.7.6";
 std::string sLogFile = sFixName + ".log";
 
 // Logger
@@ -34,6 +34,7 @@ bool bCutsceneFramegen;
 bool bMotionBlurFramegen;
 float fJXLQuality = 75.0f;
 int iJXLThreads = 1;
+bool bDisableDbgCheck;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -152,6 +153,7 @@ void Configuration()
     inipp::get_value(ini.sections["Motion Blur + Frame Generation"], "Enabled", bMotionBlurFramegen);
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "NumThreads", iJXLThreads);
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "Quality", fJXLQuality);
+    inipp::get_value(ini.sections["Disable Graphics Debugger Check"], "Enable", bDisableDbgCheck);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -176,6 +178,7 @@ void Configuration()
         spdlog::warn("Config Parse: fJXLQuality value invalid, clamped to {}", fJXLQuality);
     }
     spdlog::info("Config Parse: fJXLQuality: {}", fJXLQuality);
+    spdlog::info("Config Parse: bDisableDbgCheck: {}", bDisableDbgCheck);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
@@ -196,9 +199,6 @@ void Resolution()
             static SafetyHookMid ResolutionFixMidHook{};
             ResolutionFixMidHook = safetyhook::create_mid(ResolutionFixScanResult + 0x5,
                 [](SafetyHookContext& ctx) {
-                    // Demo 
-                    // ctx.r15 = ctx.r8;
-                    // ctx.r12 = ctx.r9;
                     ctx.rdi = ctx.r8;
                     ctx.rsi = ctx.r9;
                 });
@@ -536,6 +536,19 @@ void Misc()
         }
         else if (!FrameGenMotionBlurLockoutScanResult || !FrameGenMotionBlurLogicScanResult) {
             spdlog::error("Frame Generation Motion Blur: Pattern scan failed.");
+        }
+    }
+
+    if (bDisableDbgCheck) {
+        // Disable graphics debugger check
+        uint8_t* GraphicsDbgCheckScanResult = Memory::PatternScan(baseModule, "74 ?? E8 ?? ?? ?? ?? 84 ?? 0F 85 ?? ?? ?? ?? 48 8B ?? ?? ?? ?? ?? 48 85 ?? 74 ??");
+        if (GraphicsDbgCheckScanResult) {
+            spdlog::info("Graphics Debugger Check: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GraphicsDbgCheckScanResult - (uintptr_t)baseModule);
+            Memory::PatchBytes((uintptr_t)GraphicsDbgCheckScanResult, "\xEB", 1);
+            spdlog::info("Graphics Debugger Check: Patched instructions.");
+        }
+        else if (!GraphicsDbgCheckScanResult) {
+            spdlog::error("Graphics Debugger Check: Pattern scan failed.");
         }
     }
 }
