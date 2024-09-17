@@ -154,7 +154,7 @@ void Configuration()
     inipp::get_value(ini.sections["Motion Blur + Frame Generation"], "Enabled", bMotionBlurFramegen);
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "NumThreads", iJXLThreads);
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "Quality", fJXLQuality);
-    inipp::get_value(ini.sections["Disable Graphics Debugger Check"], "Enable", bDisableDbgCheck);
+    inipp::get_value(ini.sections["Disable Graphics Debugger Check"], "Enabled", bDisableDbgCheck);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
