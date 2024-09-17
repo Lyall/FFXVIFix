@@ -484,7 +484,7 @@ void FOV()
 {
     if (bFixFOV) { 
         // Fix <16:9 FOV
-        uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 45 ?? ?? 48 8B ?? ?? ?? ?? ?? 48 85 ?? 74 ??");
+        uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "89 ?? ?? ?? ?? ?? 48 8B ?? ?? 48 8B ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 48 8B ?? 48 8B ?? FF 90 ?? ?? ?? ??");
         if (FOVScanResult) {
             spdlog::info("FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FOVScanResult - (uintptr_t)baseModule);
 
@@ -493,8 +493,10 @@ void FOV()
                 [](SafetyHookContext& ctx) {
                     // Fix cropped FOV when at <16:9
                     if (fAspectRatio < fNativeAspect) {
-                        ctx.xmm11.f32[0] = 2.0f * atanf(tanf(ctx.xmm11.f32[0] / 2.0f) * (fNativeAspect / fAspectRatio));
-                    }
+                        float fov = *reinterpret_cast<float*>(&ctx.rax);
+                        fov = 2.0f * atanf(tanf(fov / 2.0f) * (fNativeAspect / fAspectRatio));
+                        ctx.rax = *(uint32_t*)&fov;
+                    }     
                 });
         }
         else if (!FOVScanResult) {
