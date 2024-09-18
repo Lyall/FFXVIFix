@@ -2,14 +2,14 @@
 [![Patreon-Button](https://github.com/user-attachments/assets/4f074cf5-3a94-4fe8-b915-35270f762b72)](https://www.patreon.com/Wintermance) [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W01UAI9)<br />
 [![Github All Releases](https://img.shields.io/github/downloads/Lyall/FFXVIFix/total.svg)](https://github.com/Lyall/FFXVIFix/releases)
 
-This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support, uncapped framerate in cutscenes and more.
+This is a fix for Final Fantasy XVI that adds ultrawide/narrower support, uncaps framerate in cutscenes, lets you adjust gameplay FOV and much more.
 
 ## Features
 ### General
 - Disable 30FPS cap in cutscenes/photo mode.
 - Adjust gameplay FOV.
 - Allow frame generation in cutscenes.
-- JXL screenshot quality option and fixes hitching while taking screenshot.
+- JXL screenshot quality option and fixes hitching while taking screenshots.
 - Allow the use of motion blur + frame generation.
 
 ### Ultrawide/Narrower
