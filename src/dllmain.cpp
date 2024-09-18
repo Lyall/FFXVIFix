@@ -27,6 +27,7 @@ std::pair DesktopDimensions = { 0,0 };
 bool bFixResolution;
 bool bFixHUD;
 int iHUDSize;
+bool bFixMovies;
 bool bFixFOV;
 float fAdditionalFOV;
 bool bUncapFPS;
@@ -147,6 +148,7 @@ void Configuration()
     inipp::get_value(ini.sections["Fix Resolution"], "Enabled", bFixResolution);
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
     inipp::get_value(ini.sections["Fix HUD"], "HUDSize", iHUDSize);
+    inipp::get_value(ini.sections["Fix Movies"], "Enabled", bFixMovies);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
@@ -160,6 +162,7 @@ void Configuration()
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
     spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
     spdlog::info("Config Parse: iHUDSize: {}", iHUDSize);
+    spdlog::info("Config Parse: bFixMovies: {}", bFixMovies);
     spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
     if (fAdditionalFOV < (float)-80 || fAdditionalFOV >(float)80) {
         fAdditionalFOV = std::clamp(fAdditionalFOV, (float)-80, (float)80);
@@ -452,7 +455,9 @@ void HUD()
         else if (!EikonCursorScanResult) {
             spdlog::error("Eikon Cursor: Pattern scan failed.");
         }
+    }
 
+    if (bFixMovies) {
         // Movies
         uint8_t* MoviesScanResult = Memory::PatternScan(baseModule, "C4 ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? C5 ?? ?? ?? 48 ?? ?? ?? 4C ?? ?? ?? C5 ?? ?? ?? 48 ?? ?? ??");
         if (MoviesScanResult) {
