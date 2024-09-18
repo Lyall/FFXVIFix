@@ -236,11 +236,11 @@ void Resolution()
         // Windowed Resolution
         uint8_t* WindowedResolutionsScanResult = Memory::PatternScan(baseModule, "8B ?? ?? 3B ?? ?? ?? ?? ?? 77 ?? 8B ?? ?? 3B ?? ?? ?? ?? ?? 77 ?? 89 ?? ??");
         if (WindowedResolutionsScanResult) {
-            spdlog::info("Resolution Fix: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)WindowedResolutionsScanResult - (uintptr_t)baseModule);
+            spdlog::info("Windowed Resolutions: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)WindowedResolutionsScanResult - (uintptr_t)baseModule);
             static SafetyHookMid WindowedResolutionsMidHook{};
             WindowedResolutionsMidHook = safetyhook::create_mid(WindowedResolutionsScanResult,
                 [](SafetyHookContext& ctx) {
-                    // Change first resolution option
+                    // Change first resolution option (seems to be 8K?)
                     if (ctx.rax + 0x4 && ctx.rbx == 0) {
                         *reinterpret_cast<int*>(ctx.rax + 0x4) = DesktopDimensions.first;
                         *reinterpret_cast<int*>(ctx.rax + 0x8) = DesktopDimensions.second;
@@ -248,7 +248,7 @@ void Resolution()
                 });  
         }
         else if (!WindowedResolutionsScanResult) {
-            spdlog::error("Resolution Fix: Pattern scan failed.");
+            spdlog::error("Windowed Resolution: Pattern scan failed.");
         }
     }
 
@@ -472,6 +472,30 @@ void HUD()
         }
         else if (!EikonCursorScanResult) {
             spdlog::error("Eikon Cursor: Pattern scan failed.");
+        }
+
+        // Photo mode blur background 
+        uint8_t* PhotoModeBgBlurScanResult = Memory::PatternScan(baseModule, "48 8B ?? ?? 48 89 ?? ?? ?? 75 ?? 80 ?? ?? ?? ?? ?? 00 75 ??");
+        if (PhotoModeBgBlurScanResult) {
+            spdlog::info("Photo Mode Blur: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)PhotoModeBgBlurScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid PhotoModeBgBlurMidHook{};
+            PhotoModeBgBlurMidHook = safetyhook::create_mid(PhotoModeBgBlurScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (ctx.rcx + 0x40) {
+                        // Check size, should be 660x1080
+                        if (*reinterpret_cast<int*>(ctx.rcx + 0x40) == 660 && *reinterpret_cast<int*>(ctx.rcx + 0x44) == 1080) {
+                            // Check horizontal position
+                            if (*reinterpret_cast<float*>(ctx.rcx + 0xB0) == -670.00f || *reinterpret_cast<float*>(ctx.rcx + 0xB0) == 1930.00f) {
+                                // Write 0 to width
+                                *reinterpret_cast<int*>(ctx.rcx + 0x40) = 0;
+                            }
+                        }
+                    }
+                });
+        }
+        else if (!PhotoModeBgBlurScanResult) {
+            spdlog::error("Photo Mode Blur: Pattern scan failed.");
         }
     }
 
