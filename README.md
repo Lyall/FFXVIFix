@@ -14,7 +14,7 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrow display support, 
 
 ### Ultrawide/Narrower
 - Remove pillarboxing/letterboxing in borderless/fullscreen.
-- Fixed HUD scaling.
+- Fixed HUD scaling with configurable HUD size.
 - Fixed FOV scaling at <16:9.
 
 ## Installation
