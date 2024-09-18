@@ -232,6 +232,24 @@ void Resolution()
         else if (!ResolutionFixScanResult) {
             spdlog::error("Resolution Fix: Pattern scan failed.");
         }
+
+        // Windowed Resolution
+        uint8_t* WindowedResolutionsScanResult = Memory::PatternScan(baseModule, "8B ?? ?? 3B ?? ?? ?? ?? ?? 77 ?? 8B ?? ?? 3B ?? ?? ?? ?? ?? 77 ?? 89 ?? ??");
+        if (WindowedResolutionsScanResult) {
+            spdlog::info("Resolution Fix: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)WindowedResolutionsScanResult - (uintptr_t)baseModule);
+            static SafetyHookMid WindowedResolutionsMidHook{};
+            WindowedResolutionsMidHook = safetyhook::create_mid(WindowedResolutionsScanResult,
+                [](SafetyHookContext& ctx) {
+                    // Change first resolution option
+                    if (ctx.rax + 0x4 && ctx.rbx == 0) {
+                        *reinterpret_cast<int*>(ctx.rax + 0x4) = DesktopDimensions.first;
+                        *reinterpret_cast<int*>(ctx.rax + 0x8) = DesktopDimensions.second;
+                    }
+                });  
+        }
+        else if (!WindowedResolutionsScanResult) {
+            spdlog::error("Resolution Fix: Pattern scan failed.");
+        }
     }
 
     // Current Resolution
