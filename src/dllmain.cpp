@@ -309,7 +309,11 @@ void HUD()
 
                         // Pillarboxing/letterboxing
                         ctx.r13 = 0;
-                        ctx.rax = 0;
+                        ctx.rax = 0; // -> [rsp+40]
+
+                        if (ctx.rsp + 0x40) {
+                            *reinterpret_cast<int*>(ctx.rsp + 0x40) = 0;
+                        }
                     });
             }
             else if (!HUDSizeScanResult) {
