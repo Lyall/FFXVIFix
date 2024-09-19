@@ -25,6 +25,8 @@ std::pair DesktopDimensions = { 0,0 };
 
 // Ini variables
 bool bFixResolution;
+int iWindowedResX;
+int iWindowedResY;
 bool bFixHUD;
 int iHUDSize;
 bool bFixMovies;
@@ -150,6 +152,8 @@ void Configuration()
     // Parse config
     ini.strip_trailing_comments();
     inipp::get_value(ini.sections["Fix Resolution"], "Enabled", bFixResolution);
+    inipp::get_value(ini.sections["Fix Resolution"], "WindowedResX", iWindowedResX);
+    inipp::get_value(ini.sections["Fix Resolution"], "WindowedResY", iWindowedResY);
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
     inipp::get_value(ini.sections["Fix HUD"], "HUDSize", iHUDSize);
     inipp::get_value(ini.sections["Fix Movies"], "Enabled", bFixMovies);
@@ -267,8 +271,17 @@ void Resolution()
                 [](SafetyHookContext& ctx) {
                     // Change first resolution option (seems to be 8K?)
                     if (ctx.rax + 0x4 && ctx.rbx == 0) {
-                        *reinterpret_cast<int*>(ctx.rax + 0x4) = DesktopDimensions.first;
-                        *reinterpret_cast<int*>(ctx.rax + 0x8) = DesktopDimensions.second;
+                        if (iWindowedResX == 0 || iWindowedResY == 0) {
+                            // Add desktop resolution
+                            *reinterpret_cast<int*>(ctx.rax + 0x4) = DesktopDimensions.first;
+                            *reinterpret_cast<int*>(ctx.rax + 0x8) = DesktopDimensions.second;
+                        }
+                        else {
+                            // Add custom windowed resolution
+                            *reinterpret_cast<int*>(ctx.rax + 0x4) = iWindowedResX;
+                            *reinterpret_cast<int*>(ctx.rax + 0x8) = iWindowedResY;
+                        }
+           
                     }
                 });  
         }
