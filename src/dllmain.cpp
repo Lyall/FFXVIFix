@@ -31,6 +31,7 @@ bool bFixMovies;
 bool bFixFOV;
 float fAdditionalFOV;
 bool bUncapFPS;
+float fFPSCap;
 bool bCutsceneFramegen;
 bool bMotionBlurFramegen;
 float fJXLQuality = 75.0f;
@@ -153,6 +154,7 @@ void Configuration()
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
+    inipp::get_value(ini.sections["Remove 30FPS Cap"], "Framerate", fFPSCap);
     inipp::get_value(ini.sections["Cutscene Frame Generation"], "Enabled", bCutsceneFramegen);
     inipp::get_value(ini.sections["Motion Blur + Frame Generation"], "Enabled", bMotionBlurFramegen);
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "NumThreads", iJXLThreads);
@@ -172,6 +174,12 @@ void Configuration()
     }
     spdlog::info("Config Parse: fAdditionalFOV: {}", fAdditionalFOV);
     spdlog::info("Config Parse: bUncapFPS: {}", bUncapFPS);
+    spdlog::info("Config Parse: fFPSCap: {}", fFPSCap);
+    if (fFPSCap < 10.00f) {
+        // Don't go lower than 10fps if someone messes up.
+        fFPSCap = 10.00f;
+        spdlog::warn("Config Parse: fFPSCap value invalid, set to {}", fFPSCap);
+    }
     spdlog::info("Config Parse: bCutsceneFramegen: {}", bCutsceneFramegen);
     spdlog::info("Config Parse: bMotionBlurFramegen: {}", bMotionBlurFramegen);
     if (iJXLThreads > (int)std::thread::hardware_concurrency() || iJXLThreads < 1 ) {
@@ -578,6 +586,20 @@ void FOV()
 
 void Framerate()
 {
+    if (!bUncapFPS && fFPSCap != 30.00f) {
+        // Cutscene 30fps cap
+        uint8_t* FramerateCapScanResult = Memory::PatternScan(baseModule, "C7 44 ?? ?? 01 00 00 00 C7 44 ?? ?? ?? ?? 00 00 89 ?? ?? ?? C7 44 ?? ?? ?? ?? 00 00");
+        if (FramerateCapScanResult) {
+            spdlog::info("Framerate Cap: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FramerateCapScanResult - (uintptr_t)baseModule);
+            int iFPSCap = static_cast<int>(fFPSCap * 100.00f);
+            Memory::Write((uintptr_t)FramerateCapScanResult + 0xC, (int)iFPSCap);
+            spdlog::info("Framerate Cap: Patched instruction and set framerate cap to {:d}.", iFPSCap);
+        }
+        else if (!FramerateCapScanResult) {
+            spdlog::error("Framerate Cap: Pattern scan failed.");
+        }
+    }
+
     if (bUncapFPS) {  
         // Remove 30fps framerate cap
         uint8_t* FramerateCapScanResult = Memory::PatternScan(baseModule, "75 ?? 85 ?? 74 ?? 40 ?? 01 41 ?? ?? ?? ?? ?? ?? ??");
