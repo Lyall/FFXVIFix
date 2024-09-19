@@ -46,6 +46,7 @@ bool bDisableDbgCheck;
 bool bDisableDOF;
 bool bBackgroundAudio;
 bool bLockCursor;
+bool bResizableWindow;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -221,6 +222,7 @@ void Configuration()
     inipp::get_value(ini.sections["Disable Depth of Field"], "Enabled", bDisableDOF);
     inipp::get_value(ini.sections["Game Window"], "BackgroundAudio", bBackgroundAudio);
     inipp::get_value(ini.sections["Game Window"], "LockCursor", bLockCursor);
+    inipp::get_value(ini.sections["Game Window"], "Resizable", bResizableWindow);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -266,6 +268,7 @@ void Configuration()
     spdlog::info("Config Parse: bDisableDOF: {}", bDisableDOF);
     spdlog::info("Config Parse: bBackgroundAudio: {}", bBackgroundAudio);
     spdlog::info("Config Parse: bLockCursor: {}", bLockCursor);
+    spdlog::info("Config Parse: bResizableWindow: {}", bResizableWindow);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
@@ -857,6 +860,16 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
             }
         }
         else {
+            // Add re-sizable style and enable maximize button
+            if (bResizableWindow) {
+                LONG lStyle = GetWindowLong(hWnd, GWL_STYLE);
+                if (!(lStyle & WS_SIZEBOX) || !(lStyle & WS_MAXIMIZEBOX)) {
+                    lStyle |= WS_SIZEBOX | WS_MAXIMIZEBOX;
+                    SetWindowLong(hWnd, GWL_STYLE, lStyle);
+                    SetWindowPos(hWnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+                }
+            }
+
             // Lock cursor to screen
             if (bLockCursor) {
                 RECT bounds;
@@ -865,14 +878,14 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
             }
         }
 
-    default:
+    default:  
         return CallWindowProc(OldWndProc, window, message_type, w_param, l_param);
     }
 };
 
 void WindowFocus()
 {
-    if (bBackgroundAudio || bLockCursor) {
+    if (bBackgroundAudio || bLockCursor || bResizableWindow) {
         // Hook wndproc
         int i = 0;
         while (i < 30 && !IsWindow(hWnd))
