@@ -291,6 +291,17 @@ void DetectVersion()
 void Resolution()
 {
     if (bFixResolution) {
+        // Startup resolution
+        uint8_t* StartupResolutionScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 0F 84 ?? ?? ?? ?? 8B ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? 41 ?? ??");
+        if (StartupResolutionScanResult) {
+            spdlog::info("Startup Resolution: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)StartupResolutionScanResult - (uintptr_t)baseModule);
+            Memory::PatchBytes((uintptr_t)StartupResolutionScanResult + 0x4, "\x85", 1);
+            spdlog::info("Startup Resolution: Patched instruction.");
+        }
+        else if (!StartupResolutionScanResult) {
+            spdlog::error("Startup Resolution: Pattern scan failed.");
+        }
+
         // Fix borderless/fullscreen resolution
         uint8_t* ResolutionFixScanResult = Memory::PatternScan(baseModule, "C4 ?? ?? ?? ?? 48 8B ?? ?? ?? ?? ?? ?? 8D ?? ?? ?? ?? ?? 48 ?? ?? 05 48 8D ?? ?? ?? ?? ?? ?? ?? ??");
         if (ResolutionFixScanResult) {
