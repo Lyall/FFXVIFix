@@ -42,6 +42,8 @@ float fJXLQuality = 75.0f;
 int iJXLThreads = 1;
 bool bDisableDbgCheck;
 bool bDisableDOF;
+bool bBackgroundAudio;
+bool bLockCursor;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -59,6 +61,7 @@ int iCurrentResY;
 float fEikonCursorWidthOffset;
 float fEikonCursorHeightOffset;
 bool bIsDemoVersion = false;
+LPCWSTR sWindowClassName = L"FAITHGame";
 
 void CalculateAspectRatio(bool bLog)
 {
@@ -169,6 +172,8 @@ void Configuration()
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "Quality", fJXLQuality);
     inipp::get_value(ini.sections["Disable Graphics Debugger Check"], "Enabled", bDisableDbgCheck);
     inipp::get_value(ini.sections["Disable Depth of Field"], "Enabled", bDisableDOF);
+    inipp::get_value(ini.sections["Game Window"], "BackgroundAudio", bBackgroundAudio);
+    inipp::get_value(ini.sections["Game Window"], "LockCursor", bLockCursor);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -212,6 +217,8 @@ void Configuration()
     spdlog::info("Config Parse: fJXLQuality: {}", fJXLQuality);
     spdlog::info("Config Parse: bDisableDbgCheck: {}", bDisableDbgCheck);
     spdlog::info("Config Parse: bDisableDOF: {}", bDisableDOF);
+    spdlog::info("Config Parse: bBackgroundAudio: {}", bBackgroundAudio);
+    spdlog::info("Config Parse: bLockCursor: {}", bLockCursor);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
@@ -784,6 +791,63 @@ void JXL()
     spdlog::info("JXL Tweaks: Hooked functions.");
 }
 
+HWND hWnd;
+WNDPROC OldWndProc;
+LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPARAM l_param) { 
+    switch (message_type) {
+
+    case WM_ACTIVATE:
+    case WM_ACTIVATEAPP:
+        if (w_param == WA_INACTIVE) {
+            // Clear cursor clip on focus loss
+            ClipCursor(NULL);
+
+            // Enable background audio
+            if (bBackgroundAudio) {
+                return 0;
+            }
+        }
+        else {
+            // Lock cursor to screen
+            if (bLockCursor) {
+                RECT bounds;
+                GetWindowRect(hWnd, &bounds);
+                ClipCursor(&bounds);
+            }
+            break;
+        }
+
+    default:
+        return CallWindowProc(OldWndProc, window, message_type, w_param, l_param);
+    }
+};
+
+void WindowFocus()
+{
+    // Hook wndproc
+    int i = 0;
+    while (i < 30 && !IsWindow(hWnd))
+    {
+        // Wait 1 sec then try again
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        i++;
+        hWnd = FindWindowW(sWindowClassName, nullptr);
+    }
+
+    // If 30 seconds have passed and we still dont have the handle, give up
+    if (i == 30)
+    {
+        spdlog::error("Window Focus: Failed to find window handle.");
+        return;
+    }
+    else
+    {
+        // Set new wnd proc
+        OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)NewWndProc);
+        spdlog::info("Window Focus: Set new WndProc.");
+    }  
+}
+
 DWORD __stdcall Main(void*)
 {
     Logging();
@@ -795,6 +859,7 @@ DWORD __stdcall Main(void*)
     Framerate();
     Misc();
     JXL();
+    WindowFocus();
     return true;
 }
 
