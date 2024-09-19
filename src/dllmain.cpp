@@ -741,10 +741,10 @@ void Misc()
 
     if (bDisableDOF) {
         // Disable depth of field
-        uint8_t* DepthofFieldScanResult = Memory::PatternScan(baseModule, "C6 ?? ?? ?? ?? ?? 01 48 8B ?? ?? 48 8B ?? ?? 8B ?? ?? 89 ?? ?? ?? ?? ?? 48 8B ?? ?? 48 8B ?? ?? 8B ??");
+        uint8_t* DepthofFieldScanResult = Memory::PatternScan(baseModule, "74 ?? 80 ?? ?? 08 73 ?? 44 ?? ?? ?? 41 ?? ?? C3");
         if (DepthofFieldScanResult) {
             spdlog::info("Disable Depth of Field: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)DepthofFieldScanResult - (uintptr_t)baseModule);
-            Memory::PatchBytes((uintptr_t)DepthofFieldScanResult + 0x6, "\x00", 1);
+            Memory::PatchBytes((uintptr_t)DepthofFieldScanResult, "\xEB", 1);
             spdlog::info("Disable Depth of Field: Patched instruction.");
         }
         else if (!DepthofFieldScanResult) {
