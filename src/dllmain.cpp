@@ -847,8 +847,10 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
     case WM_ACTIVATEAPP:
         if (w_param == WA_INACTIVE) {
             // Clear cursor clip on focus loss
-            ClipCursor(NULL);
-
+            if (bLockCursor) {
+                ClipCursor(NULL);
+            }
+         
             // Enable background audio
             if (bBackgroundAudio) {
                 return 0;
@@ -861,7 +863,6 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
                 GetWindowRect(hWnd, &bounds);
                 ClipCursor(&bounds);
             }
-            break;
         }
 
     default:
@@ -871,28 +872,30 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
 
 void WindowFocus()
 {
-    // Hook wndproc
-    int i = 0;
-    while (i < 30 && !IsWindow(hWnd))
-    {
-        // Wait 1 sec then try again
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        i++;
-        hWnd = FindWindowW(sWindowClassName, nullptr);
-    }
+    if (bBackgroundAudio || bLockCursor) {
+        // Hook wndproc
+        int i = 0;
+        while (i < 30 && !IsWindow(hWnd))
+        {
+            // Wait 1 sec then try again
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            i++;
+            hWnd = FindWindowW(sWindowClassName, nullptr);
+        }
 
-    // If 30 seconds have passed and we still dont have the handle, give up
-    if (i == 30)
-    {
-        spdlog::error("Window Focus: Failed to find window handle.");
-        return;
+        // If 30 seconds have passed and we still dont have the handle, give up
+        if (i == 30)
+        {
+            spdlog::error("Window Focus: Failed to find window handle.");
+            return;
+        }
+        else
+        {
+            // Set new wnd proc
+            OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)NewWndProc);
+            spdlog::info("Window Focus: Set new WndProc.");
+        }
     }
-    else
-    {
-        // Set new wnd proc
-        OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)NewWndProc);
-        spdlog::info("Window Focus: Set new WndProc.");
-    }  
 }
 
 DWORD __stdcall Main(void*)
