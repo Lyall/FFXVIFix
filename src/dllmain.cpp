@@ -36,6 +36,7 @@ bool bMotionBlurFramegen;
 float fJXLQuality = 75.0f;
 int iJXLThreads = 1;
 bool bDisableDbgCheck;
+bool bDisableDOF;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -157,6 +158,7 @@ void Configuration()
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "NumThreads", iJXLThreads);
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "Quality", fJXLQuality);
     inipp::get_value(ini.sections["Disable Graphics Debugger Check"], "Enabled", bDisableDbgCheck);
+    inipp::get_value(ini.sections["Disable Depth of Field"], "Enabled", bDisableDOF);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -183,6 +185,7 @@ void Configuration()
     }
     spdlog::info("Config Parse: fJXLQuality: {}", fJXLQuality);
     spdlog::info("Config Parse: bDisableDbgCheck: {}", bDisableDbgCheck);
+    spdlog::info("Config Parse: bDisableDOF: {}", bDisableDOF);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
@@ -646,10 +649,23 @@ void Misc()
         if (GraphicsDbgCheckScanResult) {
             spdlog::info("Graphics Debugger Check: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GraphicsDbgCheckScanResult - (uintptr_t)baseModule);
             Memory::PatchBytes((uintptr_t)GraphicsDbgCheckScanResult, "\xEB", 1);
-            spdlog::info("Graphics Debugger Check: Patched instructions.");
+            spdlog::info("Graphics Debugger Check: Patched instruction.");
         }
         else if (!GraphicsDbgCheckScanResult) {
             spdlog::error("Graphics Debugger Check: Pattern scan failed.");
+        }
+    }
+
+    if (bDisableDOF) {
+        // Disable depth of field
+        uint8_t* DepthofFieldScanResult = Memory::PatternScan(baseModule, "C6 ?? ?? ?? ?? ?? 01 48 8B ?? ?? 48 8B ?? ?? 8B ?? ?? 89 ?? ?? ?? ?? ?? 48 8B ?? ?? 48 8B ?? ?? 8B ??");
+        if (DepthofFieldScanResult) {
+            spdlog::info("Disable Depth of Field: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)DepthofFieldScanResult - (uintptr_t)baseModule);
+            Memory::PatchBytes((uintptr_t)DepthofFieldScanResult + 0x6, "\x00", 1);
+            spdlog::info("Disable Depth of Field: Patched instruction.");
+        }
+        else if (!DepthofFieldScanResult) {
+            spdlog::error("Disable Depth of Field: Pattern scan failed.");
         }
     }
 }
