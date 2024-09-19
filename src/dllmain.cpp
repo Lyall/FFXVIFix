@@ -405,7 +405,7 @@ void Resolution()
 
 void HUD()
 {
-    if (bFixHUD) {
+    if (bFixHUD && bFixResolution) {
         // HUD size
         if (!bIsDemoVersion) {
             // Full Game
