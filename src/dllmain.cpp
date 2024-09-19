@@ -635,16 +635,16 @@ void FOV()
 void Framerate()
 {
     if (!bUncapFPS && fFPSCap != 30.00f) {
-        // Cutscene 30fps cap
-        uint8_t* FramerateCapScanResult = Memory::PatternScan(baseModule, "C7 44 ?? ?? 01 00 00 00 C7 44 ?? ?? ?? ?? 00 00 89 ?? ?? ?? C7 44 ?? ?? ?? ?? 00 00");
-        if (FramerateCapScanResult) {
-            spdlog::info("Framerate Cap: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FramerateCapScanResult - (uintptr_t)baseModule);
+        // Adjust cutscene 30fps cap
+        uint8_t* CutsceneFramerateCapScanResult = Memory::PatternScan(baseModule, "C7 44 ?? ?? 01 00 00 00 C7 44 ?? ?? ?? ?? 00 00 89 ?? ?? ?? C7 44 ?? ?? ?? ?? 00 00");
+        if (CutsceneFramerateCapScanResult) {
+            spdlog::info("FPS: Cutscene Framerate Cap: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CutsceneFramerateCapScanResult - (uintptr_t)baseModule);
             int iFPSCap = static_cast<int>(fFPSCap * 100.00f);
-            Memory::Write((uintptr_t)FramerateCapScanResult + 0xC, (int)iFPSCap);
-            spdlog::info("Framerate Cap: Patched instruction and set framerate cap to {:d}.", iFPSCap);
+            Memory::Write((uintptr_t)CutsceneFramerateCapScanResult + 0xC, (int)iFPSCap);
+            spdlog::info("FPS: Cutscene Framerate Cap: Patched instruction and set framerate cap to {:d}.", iFPSCap);
         }
-        else if (!FramerateCapScanResult) {
-            spdlog::error("Framerate Cap: Pattern scan failed.");
+        else if (!CutsceneFramerateCapScanResult) {
+            spdlog::error("FPS: Cutscene Framerate Cap: Pattern scan failed.");
         }
     }
 
@@ -652,12 +652,12 @@ void Framerate()
         // Remove 30fps framerate cap
         uint8_t* FramerateCapScanResult = Memory::PatternScan(baseModule, "75 ?? 85 ?? 74 ?? 40 ?? 01 41 ?? ?? ?? ?? ?? ?? ??");
         if (FramerateCapScanResult) {
-            spdlog::info("Framerate Cap: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FramerateCapScanResult - (uintptr_t)baseModule);
+            spdlog::info("FPS: Disable Cutscene Framerate Cap: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FramerateCapScanResult - (uintptr_t)baseModule);
             Memory::PatchBytes((uintptr_t)FramerateCapScanResult + 0x8, "\x00", 1);
-            spdlog::info("Framerate Cap: Patched instruction.");
+            spdlog::info("FPS: Disable Cutscene Framerate Cap: Patched instruction.");
         }
         else if (!FramerateCapScanResult) {
-            spdlog::error("Framerate Cap: Pattern scan failed.");
+            spdlog::error("FPS: Disable Cutscene Framerate Cap: Pattern scan failed.");
         }
     }
 
@@ -665,12 +665,12 @@ void Framerate()
         // Enable frame generation during real-time cutscenes
         uint8_t* CutsceneFramegenScanResult = Memory::PatternScan(baseModule, "41 ?? ?? 74 ?? 33 ?? 48 ?? ?? E8 ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? D1 ??");
         if (CutsceneFramegenScanResult) {
-            spdlog::info("Cutscene Frame Generation: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CutsceneFramegenScanResult - (uintptr_t)baseModule);
+            spdlog::info("FPS: Cutscene Frame Generation: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CutsceneFramegenScanResult - (uintptr_t)baseModule);
             Memory::PatchBytes((uintptr_t)CutsceneFramegenScanResult + 0x3, "\xEB", 1);
-            spdlog::info("Cutscene Frame Generation: Patched instruction.");
+            spdlog::info("FPS: Cutscene Frame Generation: Patched instruction.");
         }
         else if (!CutsceneFramegenScanResult) {
-            spdlog::error("Cutscene Frame Generation: Pattern scan failed.");
+            spdlog::error("FPS: Cutscene Frame Generation: Pattern scan failed.");
         }
     }
 }
