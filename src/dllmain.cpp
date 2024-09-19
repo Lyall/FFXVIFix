@@ -849,32 +849,38 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
     case WM_ACTIVATE:
     case WM_ACTIVATEAPP:
         if (w_param == WA_INACTIVE) {
-            // Clear cursor clip on focus loss
-            if (bLockCursor) {
-                ClipCursor(NULL);
-            }
-         
             // Enable background audio
             if (bBackgroundAudio) {
                 return 0;
             }
+
+            // Clear cursor clipping
+            if (bLockCursor) {
+                ClipCursor(NULL);
+            }
         }
         else {
-            // Add re-sizable style and enable maximize button
-            if (bResizableWindow) {
-                LONG lStyle = GetWindowLong(hWnd, GWL_STYLE);
-                if (!(lStyle & WS_SIZEBOX) || !(lStyle & WS_MAXIMIZEBOX)) {
-                    lStyle |= WS_SIZEBOX | WS_MAXIMIZEBOX;
-                    SetWindowLong(hWnd, GWL_STYLE, lStyle);
-                    SetWindowPos(hWnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
-                }
-            }
-
             // Lock cursor to screen
             if (bLockCursor) {
                 RECT bounds;
                 GetWindowRect(hWnd, &bounds);
                 ClipCursor(&bounds);
+            }
+
+            // Add re-sizable style and enable maximize button
+            if (bResizableWindow) {
+                // Get styles
+                LONG lStyle = GetWindowLong(hWnd, GWL_STYLE);
+                LONG lExStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
+
+                // Check for borderless/fullscreen styles
+                if ((lStyle & WS_THICKFRAME) != WS_THICKFRAME && (lStyle & WS_POPUP) == 0 && (lExStyle & WS_EX_TOPMOST) == 0) {
+                    // Add resizable + maximize styles
+                    lStyle |= (WS_THICKFRAME | WS_MAXIMIZEBOX);
+                    SetWindowLong(hWnd, GWL_STYLE, lStyle);
+                    // Force window to update
+                    SetWindowPos(hWnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+                }
             }
         }
 
@@ -885,6 +891,19 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
 
 void WindowFocus()
 {
+    if (bLockCursor) {
+        // Cursor clipping
+        uint8_t* ClipCursorScanResult = Memory::PatternScan(baseModule, "74 ?? 48 8B ?? ?? ?? ?? ?? 38 ?? ?? ?? ?? ?? 74 ?? 84 ?? 74 ??");
+        if (ClipCursorScanResult) {
+            spdlog::info("Lock Cursor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ClipCursorScanResult - (uintptr_t)baseModule);
+            Memory::PatchBytes((uintptr_t)ClipCursorScanResult, "\x90\x90", 2);
+            spdlog::info("Lock Cursor: Patched instruction.");
+        }
+        else if (!ClipCursorScanResult) {
+            spdlog::error("Lock Cursor: Pattern scan failed.");
+        }
+    }
+
     if (bBackgroundAudio || bLockCursor || bResizableWindow) {
         // Hook wndproc
         int i = 0;
