@@ -522,9 +522,9 @@ void HUD()
                 [](SafetyHookContext& ctx) {
                     if (ctx.rcx + 0x40) {
                         // Check size, should be 660x1080
-                        if (*reinterpret_cast<int*>(ctx.rcx + 0x40) == 660 && *reinterpret_cast<int*>(ctx.rcx + 0x44) == 1080) {
+                        if ((*reinterpret_cast<int*>(ctx.rcx + 0x40) >= 655 && *reinterpret_cast<int*>(ctx.rcx + 0x40) <= 665) && (*reinterpret_cast<int*>(ctx.rcx + 0x44) >= 1075 && *reinterpret_cast<int*>(ctx.rcx + 0x44) <= 1085)) {
                             // Check horizontal position
-                            if (*reinterpret_cast<float*>(ctx.rcx + 0xB0) == -670.00f || *reinterpret_cast<float*>(ctx.rcx + 0xB0) == 1930.00f) {
+                            if ((*reinterpret_cast<float*>(ctx.rcx + 0xB0) >= -675.00f && *reinterpret_cast<float*>(ctx.rcx + 0xB0) <= -665.00f) || (*reinterpret_cast<float*>(ctx.rcx + 0xB0) >= 1925.00f && *reinterpret_cast<float*>(ctx.rcx + 0xB0) <= 1935.00f)) {
                                 // Write 0 to width
                                 *reinterpret_cast<int*>(ctx.rcx + 0x40) = 0;
                             }
