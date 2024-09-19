@@ -6,13 +6,18 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrower support, uncaps
 
 ## Features
 ### General
-- Disable 30FPS cap in cutscenes/photo mode or set your own framerate limit.
 - Adjust gameplay FOV, camera distance and camera horizontal position.
-- Allow frame generation in cutscenes.
 - JXL screenshot quality option and fixes hitching while taking screenshots.
 - Allow the use of motion blur + frame generation.
-- Force disable depth of field.
+- Disable depth of field.
+- Enable background audio.
+- Lock cursor to game window.
 
+### Performance
+- Disable 30FPS cap in cutscenes/photo mode or set your own framerate limit.
+- Allow frame generation in cutscenes.
+- Disable graphics debugger checks.
+ 
 ### Ultrawide/Narrower
 - Remove pillarboxing/letterboxing in borderless/fullscreen.
 - Fixed HUD scaling with configurable HUD size.
