@@ -3,10 +3,11 @@
 
 #include <inipp/inipp.h>
 #include <spdlog/spdlog.h>
-#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/base_sink.h>
 #include <safetyhook.hpp>
 
 HMODULE baseModule = GetModuleHandle(NULL);
+HMODULE thisModule; // Fix DLL
 
 // Version
 std::string sFixName = "FFXVIFix";
@@ -17,6 +18,7 @@ std::string sLogFile = sFixName + ".log";
 std::shared_ptr<spdlog::logger> logger;
 std::filesystem::path sExePath;
 std::string sExeName;
+std::filesystem::path sThisModulePath;
 
 // Ini
 inipp::Ini<char> ini;
@@ -95,6 +97,50 @@ void CalculateAspectRatio(bool bLog)
     }   
 }
 
+// Spdlog sink (truncate on startup, single file)
+template<typename Mutex>
+class size_limited_sink : public spdlog::sinks::base_sink<Mutex> {
+public:
+    explicit size_limited_sink(const std::string& filename, size_t max_size)
+        : _filename(filename), _max_size(max_size) {
+        truncate_log_file();
+
+        _file.open(_filename, std::ios::app);
+        if (!_file.is_open()) {
+            throw spdlog::spdlog_ex("Failed to open log file " + filename);
+        }
+    }
+
+protected:
+    void sink_it_(const spdlog::details::log_msg& msg) override {
+        if (std::filesystem::exists(_filename) && std::filesystem::file_size(_filename) >= _max_size) {
+            return;
+        }
+
+        spdlog::memory_buf_t formatted;
+        this->formatter_->format(msg, formatted);
+
+        _file.write(formatted.data(), formatted.size());
+        _file.flush();
+    }
+
+    void flush_() override {
+        _file.flush();
+    }
+
+private:
+    std::ofstream _file;
+    std::string _filename;
+    size_t _max_size;
+
+    void truncate_log_file() {
+        if (std::filesystem::exists(_filename)) {
+            std::ofstream ofs(_filename, std::ofstream::out | std::ofstream::trunc);
+            ofs.close();
+        }
+    }
+};
+
 void Logging()
 {
     // Get game name and exe path
@@ -107,14 +153,15 @@ void Logging()
     // spdlog initialisation
     {
         try {
-            logger = spdlog::basic_logger_st(sFixName.c_str(), sExePath.string() + sLogFile, true);
+            // Create 10MB truncated logger
+            logger = logger = std::make_shared<spdlog::logger>(sLogFile, std::make_shared<size_limited_sink<std::mutex>>(sThisModulePath.string() + sLogFile, 10 * 1024 * 1024));
             spdlog::set_default_logger(logger);
 
             spdlog::flush_on(spdlog::level::debug);
             spdlog::info("----------");
             spdlog::info("{} v{} loaded.", sFixName.c_str(), sFixVer.c_str());
             spdlog::info("----------");
-            spdlog::info("Path to logfile: {}", sExePath.string() + sLogFile);
+            spdlog::info("Path to logfile: {}", sThisModulePath.string() + sLogFile);
             spdlog::info("----------");
 
             // Log module details
@@ -137,18 +184,18 @@ void Logging()
 void Configuration()
 {
     // Initialise config
-    std::ifstream iniFile(sExePath.string() + sConfigFile);
+    std::ifstream iniFile(sThisModulePath.string() + sConfigFile);
     if (!iniFile) {
         AllocConsole();
         FILE* dummy;
         freopen_s(&dummy, "CONOUT$", "w", stdout);
         std::cout << "" << sFixName.c_str() << " v" << sFixVer.c_str() << " loaded." << std::endl;
         std::cout << "ERROR: Could not locate config file." << std::endl;
-        std::cout << "ERROR: Make sure " << sConfigFile.c_str() << " is located in " << sExePath.string().c_str() << std::endl;
+        std::cout << "ERROR: Make sure " << sConfigFile.c_str() << " is located in " << sThisModulePath.string().c_str() << std::endl;
         FreeLibraryAndExitThread(baseModule, 1);
     }
     else {
-        spdlog::info("Path to config file: {}", sExePath.string() + sConfigFile);
+        spdlog::info("Path to config file: {}", sThisModulePath.string() + sConfigFile);
         ini.parse(iniFile);
     }
 
@@ -872,6 +919,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
     {
     case DLL_PROCESS_ATTACH:
     {
+        thisModule = hModule;
         HANDLE mainHandle = CreateThread(NULL, 0, Main, 0, NULL, 0);
         if (mainHandle)
         {
