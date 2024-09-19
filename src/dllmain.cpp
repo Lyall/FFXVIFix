@@ -29,7 +29,9 @@ bool bFixHUD;
 int iHUDSize;
 bool bFixMovies;
 bool bFixFOV;
-float fAdditionalFOV;
+float fGameplayCamFOV;
+float fGameplayCamHorPos;
+float fGameplayCamDistMulti;
 bool bUncapFPS;
 float fFPSCap;
 bool bCutsceneFramegen;
@@ -152,7 +154,9 @@ void Configuration()
     inipp::get_value(ini.sections["Fix HUD"], "HUDSize", iHUDSize);
     inipp::get_value(ini.sections["Fix Movies"], "Enabled", bFixMovies);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
-    inipp::get_value(ini.sections["Gameplay FOV"], "AdditionalFOV", fAdditionalFOV);
+    inipp::get_value(ini.sections["Gameplay Camera"], "AdditionalFOV", fGameplayCamFOV);
+    inipp::get_value(ini.sections["Gameplay Camera"], "HorizontalPos", fGameplayCamHorPos);
+    inipp::get_value(ini.sections["Gameplay Camera"], "DistanceMultiplier", fGameplayCamDistMulti);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Framerate", fFPSCap);
     inipp::get_value(ini.sections["Cutscene Frame Generation"], "Enabled", bCutsceneFramegen);
@@ -168,18 +172,28 @@ void Configuration()
     spdlog::info("Config Parse: iHUDSize: {}", iHUDSize);
     spdlog::info("Config Parse: bFixMovies: {}", bFixMovies);
     spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
-    if (fAdditionalFOV < (float)-80 || fAdditionalFOV >(float)80) {
-        fAdditionalFOV = std::clamp(fAdditionalFOV, (float)-80, (float)80);
-        spdlog::warn("Config Parse: fAdditionalFOV value invalid, clamped to {}", fAdditionalFOV);
+    if (fGameplayCamFOV < -40.00f || fGameplayCamFOV > 140.00f) {
+        fGameplayCamFOV = std::clamp(fGameplayCamFOV, -40.00f, 140.00f);
+        spdlog::warn("Config Parse: fGameplayCamFOV value invalid, clamped to {}", fGameplayCamFOV);
     }
-    spdlog::info("Config Parse: fAdditionalFOV: {}", fAdditionalFOV);
+    spdlog::info("Config Parse: fGameplayCamFOV: {}", fGameplayCamFOV);
+    if (fGameplayCamHorPos < -5.00f || fGameplayCamHorPos > 5.00f) {
+        fGameplayCamHorPos = std::clamp(fGameplayCamHorPos, -5.00f, 5.00f);
+        spdlog::warn("Config Parse: fGameplayCamHorPos value invalid, clamped to {}", fGameplayCamHorPos);
+    }
+    spdlog::info("Config Parse: fGameplayCamHorPos: {}", fGameplayCamHorPos);
+    if (fGameplayCamDistMulti < 0.10f || fGameplayCamDistMulti > 10.00f) {
+        fGameplayCamDistMulti = std::clamp(fGameplayCamDistMulti, 0.10f, 10.00f);
+        spdlog::warn("Config Parse: fGameplayCamDistMulti value invalid, clamped to {}", fGameplayCamDistMulti);
+    }
+    spdlog::info("Config Parse: fGameplayCamDistMulti: {}", fGameplayCamDistMulti);
     spdlog::info("Config Parse: bUncapFPS: {}", bUncapFPS);
-    spdlog::info("Config Parse: fFPSCap: {}", fFPSCap);
     if (fFPSCap < 10.00f) {
         // Don't go lower than 10fps if someone messes up.
         fFPSCap = 10.00f;
         spdlog::warn("Config Parse: fFPSCap value invalid, set to {}", fFPSCap);
     }
+    spdlog::info("Config Parse: fFPSCap: {}", fFPSCap);
     spdlog::info("Config Parse: bCutsceneFramegen: {}", bCutsceneFramegen);
     spdlog::info("Config Parse: bMotionBlurFramegen: {}", bMotionBlurFramegen);
     if (iJXLThreads > (int)std::thread::hardware_concurrency() || iJXLThreads < 1 ) {
@@ -330,7 +344,7 @@ void HUD()
             // Full Game
             uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "D1 ?? 89 ?? ?? ?? 48 8B ?? ?? 48 85 ?? 74 ?? 48 8B ?? 48 8B ?? FF 50 ?? 48 8B ?? ??");
             if (HUDSizeScanResult) {
-                spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
+                spdlog::info("HUD: HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
 
                 static SafetyHookMid HUDSizeMidHook{};
                 HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x6,
@@ -349,14 +363,14 @@ void HUD()
                     });
             }
             else if (!HUDSizeScanResult) {
-                spdlog::error("HUD Size: Pattern scan failed.");
+                spdlog::error("HUD: HUD Size: Pattern scan failed.");
             }
         }
         else {
             // Demo
             uint8_t* HUDSizeScanResult = Memory::PatternScan(baseModule, "45 ?? ?? 44 ?? ?? 41 ?? ?? 48 8B ?? ?? 48 ?? ?? 74 ?? 48 ?? ?? 48 ?? ??");
             if (HUDSizeScanResult) {
-                spdlog::info("HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
+                spdlog::info("HUD: HUD Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDSizeScanResult - (uintptr_t)baseModule);
 
                 static SafetyHookMid HUDSizeMidHook{};
                 HUDSizeMidHook = safetyhook::create_mid(HUDSizeScanResult + 0x9,
@@ -371,14 +385,14 @@ void HUD()
                     });
             }
             else if (!HUDSizeScanResult) {
-                spdlog::error("HUD Size: Pattern scan failed.");
+                spdlog::error("HUD: HUD Size: Pattern scan failed.");
             }
         }
 
         // HUD pillarboxing
         uint8_t* HUDPillarboxingScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 48 85 ?? 74 ?? C5 ?? ?? ?? C5 ?? ?? ?? ?? ?? 44 ?? ?? 76 ??");
         if (HUDPillarboxingScanResult) {
-            spdlog::info("HUD Pillarboxing: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDPillarboxingScanResult - (uintptr_t)baseModule);
+            spdlog::info("HUD: HUD Pillarboxing: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDPillarboxingScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid HUDPillarboxingMidHook{};
             HUDPillarboxingMidHook = safetyhook::create_mid(HUDPillarboxingScanResult,
@@ -387,13 +401,13 @@ void HUD()
                 });
         }
         else if (!HUDPillarboxingScanResult) {
-            spdlog::error("HUD Pillarboxing: Pattern scan failed.");
+            spdlog::error("HUD: HUD Pillarboxing: Pattern scan failed.");
         }
 
         // Gameplay HUD Width
         uint8_t* GameplayHUDWidthScanResult = Memory::PatternScan(baseModule, "C5 F2 ?? ?? ?? ?? ?? ?? 8B ?? 99 2B ?? D1 ?? C5 ?? ?? ?? C5 ?? ?? ??");
         if (GameplayHUDWidthScanResult) {
-            spdlog::info("Gameplay HUD Width: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayHUDWidthScanResult - (uintptr_t)baseModule);
+            spdlog::info("HUD: Gameplay HUD Width: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayHUDWidthScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid GameplayHUDWidthMidHook{};
             GameplayHUDWidthMidHook = safetyhook::create_mid(GameplayHUDWidthScanResult,
@@ -422,13 +436,13 @@ void HUD()
                 });
         }
         else if (!GameplayHUDWidthScanResult) {
-            spdlog::error("Gameplay HUD Width: Pattern scan failed.");
+            spdlog::error("HUD: Gameplay HUD Width: Pattern scan failed.");
         }
 
         // Gameplay HUD Height
         uint8_t* GameplayHUDHeightScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 2B ?? D1 ?? C5 ?? ?? ?? C5 ?? ?? ?? C5 ?? ?? ?? E8 ?? ?? ?? ??");
         if (GameplayHUDHeightScanResult) {
-            spdlog::info("Gameplay HUD Height: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayHUDHeightScanResult - (uintptr_t)baseModule);
+            spdlog::info("HUD: Gameplay HUD Height: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayHUDHeightScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid GameplayHUDHeightMidHook{};
             GameplayHUDHeightMidHook = safetyhook::create_mid(GameplayHUDHeightScanResult,
@@ -457,13 +471,13 @@ void HUD()
                 });
         }
         else if (!GameplayHUDHeightScanResult) {
-            spdlog::error("Gameplay HUD Height: Pattern scan failed.");
+            spdlog::error("HUD: Gameplay HUD Height: Pattern scan failed.");
         }
 
         // Eikon Cursor
         uint8_t* EikonCursorScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? C5 ?? ?? ?? ?? C5 ?? ?? ?? 8B ?? ?? 99 2B ?? D1 ?? C5 ?? ?? ??");
         if (EikonCursorScanResult) {
-            spdlog::info("Eikon Cursor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)EikonCursorScanResult - (uintptr_t)baseModule);
+            spdlog::info("HUD: Eikon Cursor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)EikonCursorScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid EikonCursorWidthOffsetMidHook{};
             EikonCursorWidthOffsetMidHook = safetyhook::create_mid(EikonCursorScanResult + 0x22,
@@ -482,13 +496,13 @@ void HUD()
                 });
         }
         else if (!EikonCursorScanResult) {
-            spdlog::error("Eikon Cursor: Pattern scan failed.");
+            spdlog::error("HUD: Eikon Cursor: Pattern scan failed.");
         }
 
         // Photo mode blur background 
         uint8_t* PhotoModeBgBlurScanResult = Memory::PatternScan(baseModule, "48 8B ?? ?? 48 89 ?? ?? ?? 75 ?? 80 ?? ?? ?? ?? ?? 00 75 ??");
         if (PhotoModeBgBlurScanResult) {
-            spdlog::info("Photo Mode Blur: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)PhotoModeBgBlurScanResult - (uintptr_t)baseModule);
+            spdlog::info("HUD: Photo Mode Blur: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)PhotoModeBgBlurScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid PhotoModeBgBlurMidHook{};
             PhotoModeBgBlurMidHook = safetyhook::create_mid(PhotoModeBgBlurScanResult,
@@ -506,7 +520,7 @@ void HUD()
                 });
         }
         else if (!PhotoModeBgBlurScanResult) {
-            spdlog::error("Photo Mode Blur: Pattern scan failed.");
+            spdlog::error("HUD: Photo Mode Blur: Pattern scan failed.");
         }
     }
 
@@ -514,7 +528,7 @@ void HUD()
         // Movies
         uint8_t* MoviesScanResult = Memory::PatternScan(baseModule, "C4 ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? C5 ?? ?? ?? 48 ?? ?? ?? 4C ?? ?? ?? C5 ?? ?? ?? 48 ?? ?? ??");
         if (MoviesScanResult) {
-            spdlog::info("Movies: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MoviesScanResult - (uintptr_t)baseModule);
+            spdlog::info("HUD: Movies: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MoviesScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid MoviesMidHook{};
             MoviesMidHook = safetyhook::create_mid(MoviesScanResult + 0x6,
@@ -537,7 +551,7 @@ void HUD()
                 });
         }
         else if (!MoviesScanResult) {
-            spdlog::error("Movies: Pattern scan failed.");
+            spdlog::error("HUD: Movies: Pattern scan failed.");
         }
     }
 }
@@ -566,22 +580,56 @@ void FOV()
         }
     }
 
-    if (fAdditionalFOV != 0.00f) {
+    if (fGameplayCamFOV != 0.00f) {
         // Gameplay FOV
         uint8_t* GameplayFOVScanResult = Memory::PatternScan(baseModule, "48 8D ?? ?? ?? ?? ?? C3 C5 FA ?? ?? ?? ?? ?? 00 C5 FA ?? ?? ?? ?? ?? ?? C5 F2 ?? ?? ?? ?? ?? ?? C3");
         if (GameplayFOVScanResult) {
-            spdlog::info("Gameplay FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayFOVScanResult - (uintptr_t)baseModule);
+            spdlog::info("Gameplay Camera: FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayFOVScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid GameplayFOVMidHook{};
             GameplayFOVMidHook = safetyhook::create_mid(GameplayFOVScanResult + 0x10,
                 [](SafetyHookContext& ctx) {
-                    ctx.xmm0.f32[0] += fAdditionalFOV;
+                    ctx.xmm0.f32[0] += fGameplayCamFOV;
                 });
         }
         else if (!GameplayFOVScanResult) {
-            spdlog::error("Gameplay FOV: Pattern scan failed.");
+            spdlog::error("Gameplay Camera: FOV: Pattern scan failed.");
         }
     }
+
+    if (fGameplayCamHorPos != 0.95f) {
+        // Gameplay Camera Horizontal Position
+        uint8_t* GameplayCameraHorPosScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 8B ?? 41 ?? ?? 48 8D ?? ?? E8 ?? ?? ?? ??");
+        if (GameplayCameraHorPosScanResult) {
+            spdlog::info("Gameplay Camera: Horizontal Position: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayCameraHorPosScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid GameplayCameraHorPosMidHook{};
+            GameplayCameraHorPosMidHook = safetyhook::create_mid(GameplayCameraHorPosScanResult + 0x8,
+                [](SafetyHookContext& ctx) {
+                    ctx.xmm1.f32[0] = fGameplayCamHorPos;
+                });
+        }
+        else if (!GameplayCameraHorPosScanResult) {
+            spdlog::error("Gameplay Camera: Horizontal Position:  Pattern scan failed.");
+        }
+    }
+
+    if (fGameplayCamDistMulti != 1.00f) {
+        // Gameplay Camera Distance
+        uint8_t* GameplayCameraDistScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 48 8D ?? ?? ?? ?? ?? 4C 8D ?? ?? ?? ?? ?? 48 8B ?? C4 ?? ?? ?? ?? E8 ?? ?? ?? ??");
+        if (GameplayCameraDistScanResult) {
+            spdlog::info("Gameplay Camera: Distance: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayCameraDistScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid GameplayCameraDistMidHook{};
+            GameplayCameraDistMidHook = safetyhook::create_mid(GameplayCameraDistScanResult,
+                [](SafetyHookContext& ctx) {
+                    ctx.xmm3.f32[0] *= fGameplayCamDistMulti;
+                });
+        }
+        else if (!GameplayCameraDistScanResult) {
+            spdlog::error("Gameplay Camera: Distance: Pattern scan failed.");
+        }
+    }  
 }
 
 void Framerate()
