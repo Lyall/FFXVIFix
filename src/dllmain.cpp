@@ -47,6 +47,7 @@ bool bDisableDOF;
 bool bBackgroundAudio;
 bool bLockCursor;
 bool bResizableWindow;
+bool bDisableScreensaver;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -223,6 +224,7 @@ void Configuration()
     inipp::get_value(ini.sections["Game Window"], "BackgroundAudio", bBackgroundAudio);
     inipp::get_value(ini.sections["Game Window"], "LockCursor", bLockCursor);
     inipp::get_value(ini.sections["Game Window"], "Resizable", bResizableWindow);
+    inipp::get_value(ini.sections["Game Window"], "DisableScreensaver", bDisableScreensaver);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -269,6 +271,7 @@ void Configuration()
     spdlog::info("Config Parse: bBackgroundAudio: {}", bBackgroundAudio);
     spdlog::info("Config Parse: bLockCursor: {}", bLockCursor);
     spdlog::info("Config Parse: bResizableWindow: {}", bResizableWindow);
+    spdlog::info("Config Parse: bDisableScreensaver: {}", bDisableScreensaver);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
@@ -885,6 +888,21 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
     BOOL need_clip_cursor = FALSE;
 
     switch (message_type) {
+    case WM_SYSCOMMAND:
+        switch (LOWORD (w_param & 0xFFF0))
+        {
+            case SC_SCREENSAVE:
+            case SC_MONITORPOWER: // Many users are experiencing display shutoff during lengthy cutscenes (!!)
+            {
+                if (bDisableScreensaver && bWindowFocused)
+                {
+                    if (l_param != -1) // -1 == Monitor Power On, we do not want to block that!
+                        return TRUE;
+                }
+            }
+        }
+        break;
+
     case WM_ENTERSIZEMOVE:
     case WM_EXITSIZEMOVE:
         bSizeMove        = (message_type == WM_ENTERSIZEMOVE);
@@ -988,7 +1006,7 @@ DWORD GetMainThreadId (void)
 
 void WindowFocus()
 {
-    if (bBackgroundAudio || bLockCursor || bResizableWindow) {
+    if (bBackgroundAudio || bLockCursor || bResizableWindow || bDisableScreensaver) {
         // Hook wndproc and then subclass the window when we find the game's main window
         hkCallWndProc =
           SetWindowsHookExW (WH_CALLWNDPROC, CallWndProcHook, 0, GetMainThreadId ());
