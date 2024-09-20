@@ -852,92 +852,149 @@ void JXL()
     spdlog::info("JXL Tweaks: Hooked functions.");
 }
 
-HWND hWnd;
-WNDPROC OldWndProc;
-LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPARAM l_param) { 
+HHOOK   hkCallWndProc  = NULL;
+WNDPROC OldWndProc     = NULL;
+HWND    hWndGame       = NULL;
+BOOL    bWindowFocused = FALSE;
+BOOL    bSizeMove      = FALSE;
+
+SafetyHookInline ClipCursor_sh{};
+BOOL ClipCursor_hk(const RECT *lpRect)
+{
+    RECT bounds = {};
+
+    if (bWindowFocused == FALSE || bSizeMove) {
+        lpRect = nullptr;
+    }
+    
+    else if (bLockCursor && bWindowFocused) {
+        GetWindowRect(hWndGame, &bounds);
+        InflateRect(&bounds, -7, -7); // Keep the cursor within the grabby bits of the window frame
+
+        lpRect = &bounds;
+    }
+
+    return ClipCursor_sh.stdcall<BOOL>(lpRect);
+}
+
+LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPARAM l_param)
+{
+    if (window != hWndGame)
+        return CallWindowProc(OldWndProc, window, message_type, w_param, l_param);
+
+    BOOL need_clip_cursor = FALSE;
+
     switch (message_type) {
+    case WM_ENTERSIZEMOVE:
+    case WM_EXITSIZEMOVE:
+        bSizeMove        = (message_type == WM_ENTERSIZEMOVE);
+        need_clip_cursor = TRUE;
+        break;
+
+    case WM_KILLFOCUS:
+    case WM_SETFOCUS:
+        bWindowFocused   = (message_type == WM_SETFOCUS);
+        need_clip_cursor = TRUE;
+
+        // Add re-sizable style and enable maximize button
+        if (bResizableWindow) {
+            // Get styles
+            LONG lStyle   = GetWindowLong(window, GWL_STYLE);
+            LONG lExStyle = GetWindowLong(window, GWL_EXSTYLE);
+        
+            // Check for borderless/fullscreen styles
+            if ((lStyle & WS_THICKFRAME) != WS_THICKFRAME && (lStyle & WS_POPUP) == 0 && (lExStyle & WS_EX_TOPMOST) == 0) {
+                // Add resizable + maximize styles
+                lStyle |= (WS_THICKFRAME | WS_MAXIMIZEBOX);
+                SetWindowLong(window, GWL_STYLE, lStyle);
+
+                // Force window to update
+                SetWindowPos(window, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_ASYNCWINDOWPOS);
+            }
+        }
+        break;
 
     case WM_ACTIVATE:
     case WM_ACTIVATEAPP:
         if (w_param == WA_INACTIVE) {
             // Enable background audio
             if (bBackgroundAudio) {
+                DefWindowProcW(window, message_type, w_param, l_param); // Without this, mouse input would continue working
                 return 0;
             }
-
-            // Clear cursor clipping
-            if (bLockCursor) {
-                ClipCursor(NULL);
-            }
         }
-        else {
-            // Lock cursor to screen
-            if (bLockCursor) {
-                RECT bounds;
-                GetWindowRect(hWnd, &bounds);
-                ClipCursor(&bounds);
-            }
-
-            // Add re-sizable style and enable maximize button
-            if (bResizableWindow) {
-                // Get styles
-                LONG lStyle = GetWindowLong(hWnd, GWL_STYLE);
-                LONG lExStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
-
-                // Check for borderless/fullscreen styles
-                if ((lStyle & WS_THICKFRAME) != WS_THICKFRAME && (lStyle & WS_POPUP) == 0 && (lExStyle & WS_EX_TOPMOST) == 0) {
-                    // Add resizable + maximize styles
-                    lStyle |= (WS_THICKFRAME | WS_MAXIMIZEBOX);
-                    SetWindowLong(hWnd, GWL_STYLE, lStyle);
-                    // Force window to update
-                    SetWindowPos(hWnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
-                }
-            }
-        }
-
-    default:  
-        return CallWindowProc(OldWndProc, window, message_type, w_param, l_param);
     }
+
+    if (need_clip_cursor)
+        ClipCursor_hk(NULL); // The hook will calculate the actual rectangle to use
+
+    return CallWindowProc(OldWndProc, window, message_type, w_param, l_param);
 };
+
+void SubclassGameWindow (HWND hWnd)
+{
+    hWndGame = hWnd;
+
+    FARPROC ClipCursor_fn = GetProcAddress(GetModuleHandleW (L"user32.dll"), "ClipCursor");
+    ClipCursor_sh = safetyhook::create_inline(ClipCursor_fn, reinterpret_cast<void*>(ClipCursor_hk));
+
+    // Set new wnd proc
+    OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)NewWndProc);
+    spdlog::info("Window Focus: Subclassed Game Window");
+}
+
+LRESULT CALLBACK CallWndProcHook (
+  _In_ int    nCode,
+  _In_ WPARAM wParam,
+  _In_ LPARAM lParam )
+{
+    LRESULT ret =
+        CallNextHookEx (hkCallWndProc, nCode, wParam, lParam);
+
+    if (nCode < 0)
+        return ret;
+
+    wchar_t wnd_class_name [32];
+    HWND    hWndMsg = ((CWPSTRUCT *)lParam)->hwnd;
+
+    if (RealGetWindowClassW (hWndMsg, wnd_class_name, 31) > 0) {
+        if (! wcscmp (wnd_class_name, sWindowClassName)) {
+            UnhookWindowsHookEx (hkCallWndProc);
+            SubclassGameWindow  (hWndMsg);
+        }
+    }
+
+    return ret;
+}
+
+#include <tlhelp32.h>
+DWORD GetMainThreadId (void)
+{
+    THREADENTRY32 te32 { .dwSize = sizeof (THREADENTRY32) };
+
+    const DWORD dwProcId   = GetCurrentProcessId ();
+    HANDLE hThreadSnapshot = CreateToolhelp32Snapshot (TH32CS_SNAPTHREAD, 0);
+
+    if (Thread32First (hThreadSnapshot, &te32)) {
+        do {
+            if (te32.th32OwnerProcessID == dwProcId) {
+                return te32.th32ThreadID;
+            }
+        } while (Thread32Next (hThreadSnapshot, &te32));
+    }
+
+    return 0;
+}
 
 void WindowFocus()
 {
-    if (bLockCursor) {
-        // Cursor clipping
-        uint8_t* ClipCursorScanResult = Memory::PatternScan(baseModule, "74 ?? 48 8B ?? ?? ?? ?? ?? 38 ?? ?? ?? ?? ?? 74 ?? 84 ?? 74 ??");
-        if (ClipCursorScanResult) {
-            spdlog::info("Lock Cursor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ClipCursorScanResult - (uintptr_t)baseModule);
-            Memory::PatchBytes((uintptr_t)ClipCursorScanResult, "\x90\x90", 2);
-            spdlog::info("Lock Cursor: Patched instruction.");
-        }
-        else if (!ClipCursorScanResult) {
-            spdlog::error("Lock Cursor: Pattern scan failed.");
-        }
-    }
-
     if (bBackgroundAudio || bLockCursor || bResizableWindow) {
-        // Hook wndproc
-        int i = 0;
-        while (i < 30 && !IsWindow(hWnd))
-        {
-            // Wait 1 sec then try again
-            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            i++;
-            hWnd = FindWindowW(sWindowClassName, nullptr);
-        }
+        // Hook wndproc and then subclass the window when we find the game's main window
+        hkCallWndProc =
+          SetWindowsHookExW (WH_CALLWNDPROC, CallWndProcHook, 0, GetMainThreadId ());
 
-        // If 30 seconds have passed and we still dont have the handle, give up
-        if (i == 30)
-        {
-            spdlog::error("Window Focus: Failed to find window handle.");
-            return;
-        }
-        else
-        {
-            // Set new wnd proc
-            OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)NewWndProc);
-            spdlog::info("Window Focus: Set new WndProc.");
-        }
+        if (hkCallWndProc != 0)
+            Sleep (INFINITE);
     }
 }
 
@@ -966,10 +1023,11 @@ BOOL APIENTRY DllMain(HMODULE hModule,
     case DLL_PROCESS_ATTACH:
     {
         thisModule = hModule;
-        HANDLE mainHandle = CreateThread(NULL, 0, Main, 0, NULL, 0);
+        HANDLE mainHandle = CreateThread(NULL, 0, Main, 0, CREATE_SUSPENDED, 0);
         if (mainHandle)
         {
-            SetThreadPriority(mainHandle, THREAD_PRIORITY_HIGHEST);
+            SetThreadPriority(mainHandle, THREAD_PRIORITY_TIME_CRITICAL);
+            ResumeThread(mainHandle);
             CloseHandle(mainHandle);
         }
         break;
