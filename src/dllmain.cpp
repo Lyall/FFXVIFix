@@ -64,7 +64,7 @@ int iCurrentResX;
 int iCurrentResY;
 float fEikonCursorWidthOffset;
 float fEikonCursorHeightOffset;
-uintptr_t GameStatusAddr;
+uintptr_t MovieStatusAddr;
 bool bIsMoviePlaying = false;
 LPCWSTR sWindowClassName = L"FAITHGame";
 
@@ -569,22 +569,26 @@ void HUD()
     }
 
     if (bFixMovies) {
-        // Get game status 
-        // TODO: This is late, need a better way of finding out when a movies is playing as this causes a flash of the fullscreen image before resizing.
-        uint8_t* GameStatusScanResult = Memory::PatternScan(baseModule, "A8 ?? 75 ?? E8 ?? ?? ?? ?? 85 ?? 78 ?? C6 ?? ?? ?? ?? ?? 03 33 ?? EB ??");
-        if (GameStatusScanResult) {
-            spdlog::info("HUD: Movies: Game Status: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameStatusScanResult - (uintptr_t)baseModule);
+        // Get movie status 
+        // TODO: See if there is a better way of confirming when a movie is/isn't playing.
+        uint8_t* MovieStatusScanResult = Memory::PatternScan(baseModule, "44 ?? ?? ?? ?? ?? ?? 48 8B ?? ?? 48 89 ?? ?? ?? 48 ?? ?? ?? 74 ?? 48 ?? ??");
+        if (MovieStatusScanResult) {
+            spdlog::info("HUD: Movies: Status: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieStatusScanResult - (uintptr_t)baseModule);
 
-            static SafetyHookMid GameStatusMidHook{};
-            GameStatusMidHook = safetyhook::create_mid(GameStatusScanResult + 0xD,
+            static SafetyHookMid MovieStatusMidHook{};
+            MovieStatusMidHook = safetyhook::create_mid(MovieStatusScanResult,
                 [](SafetyHookContext& ctx) {
-                    if (ctx.rbx + 0x1C4) {
-                        GameStatusAddr = ctx.rbx + 0x1C4;
+                    if (ctx.rax + 0x91) {
+                        MovieStatusAddr = ctx.rax + 0x91;
+                    }
+
+                    if ((ctx.r12 & 0xFF) == 2) {
+                        bIsMoviePlaying = true;
                     }
                 });
         }
-        else if (!GameStatusScanResult) {
-            spdlog::error("HUD: Movies: Game Status: Pattern scan failed.");
+        else if (!MovieStatusScanResult) {
+            spdlog::error("HUD: Movies: Status: Pattern scan failed.");
         }
 
         // Movie size
@@ -595,9 +599,8 @@ void HUD()
             static SafetyHookMid MovieSizeMidHook{};
             MovieSizeMidHook = safetyhook::create_mid(MovieSizeScanResult,
                 [](SafetyHookContext& ctx) {
-                    if (GameStatusAddr) {
-                        int iGameStatus = *reinterpret_cast<BYTE*>(GameStatusAddr);
-                        if (iGameStatus == 3 || iGameStatus == 4) {
+                    if (MovieStatusAddr) {
+                        if (*reinterpret_cast<BYTE*>(MovieStatusAddr) == 2) {
                             bIsMoviePlaying = true;
                         }
                         else {
