@@ -11,7 +11,7 @@ HMODULE thisModule; // Fix DLL
 
 // Version
 std::string sFixName = "FFXVIFix";
-std::string sFixVer = "0.8.0";
+std::string sFixVer = "0.8.1";
 std::string sLogFile = sFixName + ".log";
 
 // Logger
@@ -64,6 +64,8 @@ int iCurrentResX;
 int iCurrentResY;
 float fEikonCursorWidthOffset;
 float fEikonCursorHeightOffset;
+uintptr_t GameStatusAddr;
+bool bIsMoviePlaying = false;
 LPCWSTR sWindowClassName = L"FAITHGame";
 
 void CalculateAspectRatio(bool bLog)
@@ -168,7 +170,7 @@ void Logging()
             spdlog::info("----------");
             spdlog::info("{} v{} loaded.", sFixName.c_str(), sFixVer.c_str());
             spdlog::info("----------");
-            spdlog::info("Path to logfile: {}", sThisModulePath.string() + sLogFile);
+            spdlog::info("Log file: {}", sThisModulePath.string() + sLogFile);
             spdlog::info("----------");
 
             // Log module details
@@ -202,7 +204,7 @@ void Configuration()
         FreeLibraryAndExitThread(baseModule, 1);
     }
     else {
-        spdlog::info("Path to config file: {}", sThisModulePath.string() + sConfigFile);
+        spdlog::info("Config file: {}", sThisModulePath.string() + sConfigFile);
         ini.parse(iniFile);
     }
 
@@ -567,35 +569,85 @@ void HUD()
     }
 
     if (bFixMovies) {
-        // Movies
-        uint8_t* MoviesScanResult = Memory::PatternScan(baseModule, "8B ?? ?? 48 8B ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ??");
-        if (MoviesScanResult) {
-            spdlog::info("HUD: Movies: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MoviesScanResult - (uintptr_t)baseModule);
-            // Change xmm8 to xmm9
-            Memory::PatchBytes((uintptr_t)MoviesScanResult + 0x1E, "\x4C", 1);
+        uint8_t* GameStatusScanResult = Memory::PatternScan(baseModule, "A8 ?? 75 ?? E8 ?? ?? ?? ?? 85 ?? 78 ?? C6 ?? ?? ?? ?? ?? 03 33 ?? EB ??");
+        if (GameStatusScanResult) {
+            spdlog::info("HUD: Movies: Game Status: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameStatusScanResult - (uintptr_t)baseModule);
 
-            static SafetyHookMid MoviesMidHook{};
-            MoviesMidHook = safetyhook::create_mid(MoviesScanResult + 0xF,
+            static SafetyHookMid GameStatusMidHook{};
+            GameStatusMidHook = safetyhook::create_mid(GameStatusScanResult + 0xD,
                 [](SafetyHookContext& ctx) {
-                    float Width = ctx.xmm0.f32[0];
-                    float Height = ctx.xmm1.f32[0];
-
-                    if (fAspectRatio > fNativeAspect) {
-                        float HUDWidth = Height * fNativeAspect;
-                        float WidthOffset = (Width - HUDWidth) / 2.00f;
-                        ctx.xmm0.f32[0] = HUDWidth + WidthOffset;
-                        ctx.xmm9.f32[0] = WidthOffset;
-                    }
-                    else if (fAspectRatio < fNativeAspect) {
-                        float HUDHeight = Width / fNativeAspect;
-                        float HeightOffset = (Height - HUDHeight) / 2.00f;
-                        ctx.xmm1.f32[0] = HUDHeight + HeightOffset;
-                        ctx.xmm8.f32[0] = HeightOffset;
+                    if (ctx.rbx + 0x1C4) {
+                        GameStatusAddr = ctx.rbx + 0x1C4;
                     }
                 });
         }
-        else if (!MoviesScanResult) {
-            spdlog::error("HUD: Movies: Pattern scan failed.");
+        else if (!GameStatusScanResult) {
+            spdlog::error("HUD: Movies: Game Status: Pattern scan failed.");
+        }
+
+        // Movie size
+        uint8_t* MovieSizeScanResult = Memory::PatternScan(baseModule, "41 ?? ?? ?? ?? C5 ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? C4 ?? ?? ?? ?? 3B ?? 0F ?? ??");
+        if (MovieSizeScanResult) {
+            spdlog::info("HUD: Movies: Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieSizeScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid MovieSizeMidHook{};
+            MovieSizeMidHook = safetyhook::create_mid(MovieSizeScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (GameStatusAddr) {
+                        int iGameStatus = *reinterpret_cast<BYTE*>(GameStatusAddr);
+                        if (iGameStatus == 3) {
+                            bIsMoviePlaying = true;
+                        }
+                        else {
+                            bIsMoviePlaying = false;
+                        }
+                    }
+
+                    if (ctx.r10 + 0x14) {
+                        if (bIsMoviePlaying) {
+                            if (fAspectRatio > fNativeAspect) {
+                                *reinterpret_cast<short*>(ctx.r10 + 0x14) = (short)fHUDWidth;
+                            }
+                            else if (fAspectRatio < fNativeAspect) {
+                                *reinterpret_cast<short*>(ctx.r10 + 0x16) = (short)fHUDHeight;
+                            }                       
+                        }
+                        else {
+                            // Restore original values
+                            *reinterpret_cast<short*>(ctx.r10 + 0x14) = (short)iCurrentResX;
+                            *reinterpret_cast<short*>(ctx.r10 + 0x16) = (short)iCurrentResY;
+                        }
+                    }      
+                });
+        }
+        else if (!MovieSizeScanResult) {
+            spdlog::error("HUD: Movies: Size: Pattern scan failed.");
+        }
+
+        // Movie offset
+        uint8_t* MovieOffsetScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? 49 ?? ?? ?? 4D ?? ?? ?? ?? ?? ?? ?? 4C ?? ?? 4D ?? ??");
+        if (MovieOffsetScanResult) {
+            spdlog::info("HUD: Movies: Offset: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieOffsetScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid MovieOffsetMidHook{};
+            MovieOffsetMidHook = safetyhook::create_mid(MovieOffsetScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (bIsMoviePlaying) {
+                        if (fAspectRatio > fNativeAspect) {
+                            if (ctx.xmm11.f32[0] == fHUDWidth) {
+                                ctx.xmm0.f32[0] = fHUDWidthOffset;
+                            }
+                        }
+                        else if (fAspectRatio < fNativeAspect) {
+                            if (ctx.xmm12.f32[0] == fHUDHeight) {
+                                ctx.xmm1.f32[0] = fHUDHeightOffset;
+                            }
+                        }
+                    }
+                });
+        }
+        else if (!MovieOffsetScanResult) {
+            spdlog::error("HUD: Movies: Offset: Pattern scan failed.");
         }
     }
 }
