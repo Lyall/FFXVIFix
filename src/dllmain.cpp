@@ -562,27 +562,29 @@ void HUD()
 
     if (bFixMovies) {
         // Movies
-        uint8_t* MoviesScanResult = Memory::PatternScan(baseModule, "C4 ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? C5 ?? ?? ?? 48 ?? ?? ?? 4C ?? ?? ?? C5 ?? ?? ?? 48 ?? ?? ??");
+        uint8_t* MoviesScanResult = Memory::PatternScan(baseModule, "8B ?? ?? 48 8B ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ??");
         if (MoviesScanResult) {
             spdlog::info("HUD: Movies: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MoviesScanResult - (uintptr_t)baseModule);
+            // Change xmm8 to xmm9
+            Memory::PatchBytes((uintptr_t)MoviesScanResult + 0x1E, "\x4C", 1);
 
             static SafetyHookMid MoviesMidHook{};
-            MoviesMidHook = safetyhook::create_mid(MoviesScanResult + 0x6,
+            MoviesMidHook = safetyhook::create_mid(MoviesScanResult + 0xF,
                 [](SafetyHookContext& ctx) {
                     float Width = ctx.xmm0.f32[0];
-                    float Height = ctx.xmm2.f32[0];
+                    float Height = ctx.xmm1.f32[0];
 
                     if (fAspectRatio > fNativeAspect) {
-                        float HUDWidth = ctx.xmm2.f32[0] * fNativeAspect;
+                        float HUDWidth = Height * fNativeAspect;
                         float WidthOffset = (Width - HUDWidth) / 2.00f;
                         ctx.xmm0.f32[0] = HUDWidth + WidthOffset;
-                        ctx.xmm1.f32[0] = WidthOffset;
+                        ctx.xmm9.f32[0] = WidthOffset;
                     }
                     else if (fAspectRatio < fNativeAspect) {
-                        float HUDHeight = ctx.xmm0.f32[0] / fNativeAspect;
+                        float HUDHeight = Width / fNativeAspect;
                         float HeightOffset = (Height - HUDHeight) / 2.00f;
-                        ctx.xmm2.f32[0] = HUDHeight + HeightOffset;
-                        ctx.xmm3.f32[0] = HeightOffset;
+                        ctx.xmm1.f32[0] = HUDHeight + HeightOffset;
+                        ctx.xmm8.f32[0] = HeightOffset;
                     }
                 });
         }
