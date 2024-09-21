@@ -569,6 +569,8 @@ void HUD()
     }
 
     if (bFixMovies) {
+        // Get game status 
+        // TODO: This is late, need a better way of finding out when a movies is playing as this causes a flash of the fullscreen image before resizing.
         uint8_t* GameStatusScanResult = Memory::PatternScan(baseModule, "A8 ?? 75 ?? E8 ?? ?? ?? ?? 85 ?? 78 ?? C6 ?? ?? ?? ?? ?? 03 33 ?? EB ??");
         if (GameStatusScanResult) {
             spdlog::info("HUD: Movies: Game Status: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameStatusScanResult - (uintptr_t)baseModule);
@@ -595,7 +597,7 @@ void HUD()
                 [](SafetyHookContext& ctx) {
                     if (GameStatusAddr) {
                         int iGameStatus = *reinterpret_cast<BYTE*>(GameStatusAddr);
-                        if (iGameStatus == 3) {
+                        if (iGameStatus == 3 || iGameStatus == 4) {
                             bIsMoviePlaying = true;
                         }
                         else {
@@ -606,10 +608,10 @@ void HUD()
                     if (ctx.r10 + 0x14) {
                         if (bIsMoviePlaying) {
                             if (fAspectRatio > fNativeAspect) {
-                                *reinterpret_cast<short*>(ctx.r10 + 0x14) = (short)fHUDWidth;
+                                *reinterpret_cast<short*>(ctx.r10 + 0x14) = (short)std::round(fHUDWidth);
                             }
                             else if (fAspectRatio < fNativeAspect) {
-                                *reinterpret_cast<short*>(ctx.r10 + 0x16) = (short)fHUDHeight;
+                                *reinterpret_cast<short*>(ctx.r10 + 0x16) = (short)std::round(fHUDHeight);
                             }                       
                         }
                         else {
@@ -634,12 +636,12 @@ void HUD()
                 [](SafetyHookContext& ctx) {
                     if (bIsMoviePlaying) {
                         if (fAspectRatio > fNativeAspect) {
-                            if (ctx.xmm11.f32[0] == fHUDWidth) {
+                            if (ctx.xmm11.f32[0] == std::round(fHUDWidth)) {
                                 ctx.xmm0.f32[0] = fHUDWidthOffset;
                             }
                         }
                         else if (fAspectRatio < fNativeAspect) {
-                            if (ctx.xmm12.f32[0] == fHUDHeight) {
+                            if (ctx.xmm12.f32[0] == std::round(fHUDHeight)) {
                                 ctx.xmm1.f32[0] = fHUDHeightOffset;
                             }
                         }
