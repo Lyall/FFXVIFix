@@ -570,20 +570,19 @@ void HUD()
 
     if (bFixMovies) {
         // Get movie status 
-        // TODO: See if there is a better way of confirming when a movie is/isn't playing.
-        uint8_t* MovieStatusScanResult = Memory::PatternScan(baseModule, "44 ?? ?? ?? ?? ?? ?? 48 8B ?? ?? 48 89 ?? ?? ?? 48 ?? ?? ?? 74 ?? 48 ?? ??");
+        uint8_t* MovieStatusScanResult = Memory::PatternScan(baseModule, "0F 84 ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? C4 ?? ?? ?? ?? 48 8B ?? 80 ?? ?? ?? ?? ?? 02");
         if (MovieStatusScanResult) {
             spdlog::info("HUD: Movies: Status: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieStatusScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid MovieStatusMidHook{};
             MovieStatusMidHook = safetyhook::create_mid(MovieStatusScanResult,
                 [](SafetyHookContext& ctx) {
-                    if (ctx.rax + 0x91) {
-                        MovieStatusAddr = ctx.rax + 0x91;
-                    }
-
-                    if ((ctx.r12 & 0xFF) == 2) {
+                    if ((ctx.rflags & (1 << 6)) == 0)
+                    {
                         bIsMoviePlaying = true;
+                    }
+                    else {
+                        bIsMoviePlaying = false;
                     }
                 });
         }
@@ -599,15 +598,6 @@ void HUD()
             static SafetyHookMid MovieSizeMidHook{};
             MovieSizeMidHook = safetyhook::create_mid(MovieSizeScanResult,
                 [](SafetyHookContext& ctx) {
-                    if (MovieStatusAddr) {
-                        if (*reinterpret_cast<BYTE*>(MovieStatusAddr) == 2) {
-                            bIsMoviePlaying = true;
-                        }
-                        else {
-                            bIsMoviePlaying = false;
-                        }
-                    }
-
                     if (ctx.r10 + 0x14) {
                         if (bIsMoviePlaying) {
                             if (fAspectRatio > fNativeAspect) {
