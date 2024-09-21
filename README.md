@@ -12,6 +12,8 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrower support, uncaps
 - Disable depth of field.
 - Enable background audio.
 - Lock cursor to game window.
+- Resize game window.
+- Disable display sleep/screensaver while the game is running.
 
 ### Performance
 - Disable 30FPS cap in cutscenes/photo mode or set your own framerate limit.
