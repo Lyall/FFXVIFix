@@ -713,22 +713,6 @@ void Framerate()
     }
 }
 
-// JXL Hooks
-SafetyHookInline JxlEncoderDistanceFromQuality_sh{};
-float JxlEncoderDistanceFromQuality_hk(float quality)
-{
-    quality = fJXLQuality;
-    spdlog::info("JXL Tweaks: JxlEncoderDistanceFromQuality: Quality level = {}", quality);
-    return JxlEncoderDistanceFromQuality_sh.fastcall<float>(quality);
-}
-
-SafetyHookInline JxlThreadParallelRunnerDefaultNumWorkerThreads_sh{};
-size_t JxlThreadParallelRunnerDefaultNumWorkerThreads_hk(void)
-{
-    spdlog::info("JXL Tweaks: JxlThreadParallelRunnerDefaultNumWorkerThreads: NumThreads = {}", iJXLThreads);
-    return iJXLThreads;
-}
-
 void Misc()
 {
     if (bMotionBlurFramegen) {
@@ -767,15 +751,36 @@ void Misc()
     if (bDisableDOF) {
         // Disable depth of field
         uint8_t* DepthofFieldScanResult = Memory::PatternScan(baseModule, "74 ?? 80 ?? ?? 08 73 ?? 44 ?? ?? ?? 41 ?? ?? C3");
-        if (DepthofFieldScanResult) {
+        uint8_t* NearDepthofFieldScanResult = Memory::PatternScan(baseModule, "75 ?? 48 ?? ?? ?? 44 ?? ?? ?? ?? ?? ?? 75 ?? 0F ?? ?? ?? 48 ?? ?? ?? ?? ?? ??");
+        if (DepthofFieldScanResult && NearDepthofFieldScanResult) {
             spdlog::info("Disable Depth of Field: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)DepthofFieldScanResult - (uintptr_t)baseModule);
             Memory::PatchBytes((uintptr_t)DepthofFieldScanResult, "\xEB", 1);
             spdlog::info("Disable Depth of Field: Patched instruction.");
+
+            spdlog::info("Disable Depth of Field: Near: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)NearDepthofFieldScanResult - (uintptr_t)baseModule);
+            Memory::PatchBytes((uintptr_t)NearDepthofFieldScanResult, "\xEB", 1);
+            spdlog::info("Disable Depth of Field: Near: Patched instruction.");
         }
-        else if (!DepthofFieldScanResult) {
+        else if (!DepthofFieldScanResult || !NearDepthofFieldScanResult) {
             spdlog::error("Disable Depth of Field: Pattern scan failed.");
         }
     }
+}
+
+// JXL Hooks
+SafetyHookInline JxlEncoderDistanceFromQuality_sh{};
+float JxlEncoderDistanceFromQuality_hk(float quality)
+{
+    quality = fJXLQuality;
+    spdlog::info("JXL Tweaks: JxlEncoderDistanceFromQuality: Quality level = {}", quality);
+    return JxlEncoderDistanceFromQuality_sh.fastcall<float>(quality);
+}
+
+SafetyHookInline JxlThreadParallelRunnerDefaultNumWorkerThreads_sh{};
+size_t JxlThreadParallelRunnerDefaultNumWorkerThreads_hk(void)
+{
+    spdlog::info("JXL Tweaks: JxlThreadParallelRunnerDefaultNumWorkerThreads: NumThreads = {}", iJXLThreads);
+    return iJXLThreads;
 }
 
 void JXL()
