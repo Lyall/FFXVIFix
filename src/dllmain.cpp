@@ -64,7 +64,6 @@ int iCurrentResX;
 int iCurrentResY;
 float fEikonCursorWidthOffset;
 float fEikonCursorHeightOffset;
-uintptr_t MovieStatusAddr;
 bool bIsMoviePlaying = false;
 LPCWSTR sWindowClassName = L"FAITHGame";
 
@@ -255,8 +254,7 @@ void Configuration()
     }
     spdlog::info("Config Parse: fGameplayCamDistMulti: {}", fGameplayCamDistMulti);
     spdlog::info("Config Parse: bUncapFPS: {}", bUncapFPS);
-    if (fFPSCap < 10.00f) {
-        // Don't go lower than 10fps if someone messes up.
+    if (fFPSCap < 10.00f) { // Don't go lower than 10fps if someone messes up.
         fFPSCap = 10.00f;
         spdlog::warn("Config Parse: fFPSCap value invalid, set to {}", fFPSCap);
     }
@@ -577,6 +575,7 @@ void HUD()
             static SafetyHookMid MovieStatusMidHook{};
             MovieStatusMidHook = safetyhook::create_mid(MovieStatusScanResult,
                 [](SafetyHookContext& ctx) {
+                    // Check zero flag 
                     if ((ctx.rflags & (1 << 6)) == 0)
                     {
                         bIsMoviePlaying = true;
@@ -725,7 +724,7 @@ void FOV()
 
 void Framerate()
 {
-    if (!bUncapFPS && fFPSCap != 30.00f) {
+    if (!bUncapFPS && fFPSCap != 29.97f) {
         // Adjust cutscene 30fps cap
         uint8_t* CutsceneFramerateCapScanResult = Memory::PatternScan(baseModule, "C7 44 ?? ?? 01 00 00 00 C7 44 ?? ?? ?? ?? 00 00 89 ?? ?? ?? C7 44 ?? ?? ?? ?? 00 00");
         if (CutsceneFramerateCapScanResult) {
