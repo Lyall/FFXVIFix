@@ -144,6 +144,12 @@ private:
 
 void Logging()
 {
+    // Get this module path
+    WCHAR thisModulePath[_MAX_PATH] = { 0 };
+    GetModuleFileNameW(thisModule, thisModulePath, MAX_PATH);
+    sThisModulePath = thisModulePath;
+    sThisModulePath = sThisModulePath.remove_filename();
+
     // Get game name and exe path
     WCHAR exePath[_MAX_PATH] = { 0 };
     GetModuleFileNameW(baseModule, exePath, MAX_PATH);
