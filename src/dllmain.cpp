@@ -48,6 +48,8 @@ bool bBackgroundAudio;
 bool bLockCursor;
 bool bResizableWindow;
 bool bDisableScreensaver;
+int iMaxDynRes;
+int iMinDynRes;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -231,6 +233,8 @@ void Configuration()
     inipp::get_value(ini.sections["Game Window"], "LockCursor", bLockCursor);
     inipp::get_value(ini.sections["Game Window"], "Resizable", bResizableWindow);
     inipp::get_value(ini.sections["Game Window"], "DisableScreensaver", bDisableScreensaver);
+    inipp::get_value(ini.sections["Dynamic Resolution"], "MaxResolution", iMaxDynRes);
+    inipp::get_value(ini.sections["Dynamic Resolution"], "MinResolution", iMinDynRes);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -279,6 +283,16 @@ void Configuration()
     spdlog::info("Config Parse: bLockCursor: {}", bLockCursor);
     spdlog::info("Config Parse: bResizableWindow: {}", bResizableWindow);
     spdlog::info("Config Parse: bDisableScreensaver: {}", bDisableScreensaver);
+    if (iMaxDynRes < 50 || iMaxDynRes > 100) {
+        iMaxDynRes = std::clamp(iMaxDynRes, 50, 100);
+        spdlog::warn("Config Parse: iMaxDynRes value invalid, clamped to {}", iMaxDynRes);
+    }
+    spdlog::info("Config Parse: iMaxDynRes: {}", iMaxDynRes);
+    if (iMinDynRes < 50 || iMinDynRes > 100) {
+        iMinDynRes = std::clamp(iMinDynRes, 50, 100);
+        spdlog::warn("Config Parse: iMinDynRes value invalid, clamped to {}", iMinDynRes);
+    }
+    spdlog::info("Config Parse: iMinDynRes: {}", iMinDynRes);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
@@ -749,7 +763,7 @@ void FOV()
                 });
         }
         else if (!GameplayCameraHorPosScanResult) {
-            spdlog::error("Gameplay Camera: Horizontal Position:  Pattern scan failed.");
+            spdlog::error("Gameplay Camera: Horizontal Position: Pattern scan failed.");
         }
     }
 
@@ -866,6 +880,27 @@ void Misc()
             spdlog::error("Disable Depth of Field: Pattern scan failed.");
         }
     }
+
+    if (iMaxDynRes != 95 || iMinDynRes != 50) {
+        // Dynamic resolution upper/lower bounds
+        uint8_t* DynamicResBoundsScanResult = Memory::PatternScan(baseModule, "0F ?? ?? ?? 3A ?? 0F ?? ?? 0F ?? ?? 0F ?? ?? ?? 3B ?? 0F ?? ?? 3B ?? 0F ?? ?? ??");
+        if (DynamicResBoundsScanResult) {
+            spdlog::info("Dynamic Resolution: Bounds: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)DynamicResBoundsScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid DynamicResBoundsMidHook{};
+            DynamicResBoundsMidHook = safetyhook::create_mid(DynamicResBoundsScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (ctx.rdi + 0x22) {
+                        *reinterpret_cast<BYTE*>(ctx.rdi + 0x22) = static_cast<BYTE>(iMaxDynRes); // Max scale
+                        *reinterpret_cast<BYTE*>(ctx.rdi + 0x20) = static_cast<BYTE>(iMinDynRes); // Min scale
+                    }
+                });
+        }
+        else if (!DynamicResBoundsScanResult) {
+            spdlog::error("Dynamic Resolution: Bounds: Pattern scan failed.");
+        }
+    }
+
 }
 
 // JXL Hooks
