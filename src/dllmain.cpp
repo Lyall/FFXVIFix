@@ -11,7 +11,7 @@ HMODULE thisModule; // Fix DLL
 
 // Version
 std::string sFixName = "FFXVIFix";
-std::string sFixVer = "0.8.1";
+std::string sFixVer = "0.8.2";
 std::string sLogFile = sFixName + ".log";
 
 // Logger
@@ -625,31 +625,45 @@ void HUD()
         }
 
         // Movie size
-        uint8_t* MovieSizeScanResult = Memory::PatternScan(baseModule, "41 ?? ?? ?? ?? C5 ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? C4 ?? ?? ?? ?? 3B ?? 0F ?? ??");
-        if (MovieSizeScanResult) {
-            spdlog::info("HUD: Movies: Size: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieSizeScanResult - (uintptr_t)baseModule);
+        uint8_t* MovieSize1ScanResult = Memory::PatternScan(baseModule, "44 89 ?? ?? ?? 44 89 ?? ?? ?? C5 ?? ?? ?? ?? 41 ?? ?? ?? 77 ??");
+        uint8_t* MovieSize2ScanResult = Memory::PatternScan(baseModule, "49 ?? ?? 4C 89 ?? ?? 4C 89 ?? ?? E8 ?? ?? ?? ?? 8B ?? ?? ?? 48 8D ?? ??");
+        if (MovieSize1ScanResult && MovieSize2ScanResult) {
+            spdlog::info("HUD: Movies: Size: 1: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieSize1ScanResult - (uintptr_t)baseModule);
+            spdlog::info("HUD: Movies: Size: 2: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieSize2ScanResult - (uintptr_t)baseModule);
 
-            static SafetyHookMid MovieSizeMidHook{};
-            MovieSizeMidHook = safetyhook::create_mid(MovieSizeScanResult,
+            static bool bUpdate = false;
+
+            static SafetyHookMid MovieSize1MidHook{};
+            MovieSize1MidHook = safetyhook::create_mid(MovieSize1ScanResult,
                 [](SafetyHookContext& ctx) {
-                    if (ctx.r10 + 0x14) {
-                        if (bIsMoviePlaying) {
-                            if (fAspectRatio > fNativeAspect) {
-                                *reinterpret_cast<short*>(ctx.r10 + 0x14) = (short)std::round(fHUDWidth);
-                            }
-                            else if (fAspectRatio < fNativeAspect) {
-                                *reinterpret_cast<short*>(ctx.r10 + 0x16) = (short)std::round(fHUDHeight);
-                            }                       
+                    bUpdate = false;
+
+                    // Force an update which forces the second hook to execute
+                    if (bIsMoviePlaying) {
+                        if (fAspectRatio > fNativeAspect) {
+                            ctx.r10 = (int)std::round(fHUDWidth);
                         }
-                        else {
-                            // Restore original values
-                            *reinterpret_cast<short*>(ctx.r10 + 0x14) = (short)iCurrentResX;
-                            *reinterpret_cast<short*>(ctx.r10 + 0x16) = (short)iCurrentResY;
+                        else if (fAspectRatio < fNativeAspect) {
+                            ctx.r11 = (int)std::round(fHUDHeight);
                         }
-                    }      
+                        bUpdate = true;
+                    }
+                });
+
+            static SafetyHookMid MovieSize2MidHook{};
+            MovieSize2MidHook = safetyhook::create_mid(MovieSize2ScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (bIsMoviePlaying && bUpdate) {
+                        if (fAspectRatio > fNativeAspect) {
+                            ctx.r9 = (int)std::round(fHUDWidth);
+                        }
+                        else if (fAspectRatio < fNativeAspect) {
+                            ctx.r8 = (int)std::round(fHUDHeight);
+                        }
+                    }
                 });
         }
-        else if (!MovieSizeScanResult) {
+        else if (!MovieSize1ScanResult || !MovieSize2ScanResult) {
             spdlog::error("HUD: Movies: Size: Pattern scan failed.");
         }
 
