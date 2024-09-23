@@ -921,12 +921,32 @@ HWND    hWndGame       = NULL;
 BOOL    bWindowFocused = FALSE;
 BOOL    bSizeMove      = FALSE;
 
+SafetyHookInline ShowWindow_sh{};
+BOOL
+WINAPI
+ShowWindow_hk(
+  _In_ HWND hWnd,
+  _In_ int  nCmdShow)
+{
+    // Never let the game hide the window.
+    //
+    // That will cause spurious window activation after resuming from
+    // display sleep/screensaver
+    if (hWnd == hWndGame && hWnd != 0) {
+        if (nCmdShow == SW_HIDE) {
+            return TRUE;
+        }
+    }
+
+    return ShowWindow_sh.stdcall<BOOL>(hWnd, nCmdShow);
+}
+
 SafetyHookInline ClipCursor_sh{};
 BOOL ClipCursor_hk(const RECT *lpRect)
 {
     RECT bounds = {};
 
-    if (bWindowFocused == FALSE || bSizeMove) {
+    if (bWindowFocused == FALSE || bSizeMove || GetForegroundWindow () != hWndGame) {
         lpRect = nullptr;
     }
     
@@ -939,13 +959,38 @@ BOOL ClipCursor_hk(const RECT *lpRect)
 
     return ClipCursor_sh.stdcall<BOOL>(lpRect);
 }
-
 LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPARAM l_param)
 {
     if (window != hWndGame)
         return CallWindowProc(OldWndProc, window, message_type, w_param, l_param);
 
+    // Game does not process Win32 keyboard or mouse messages, and this causes
+    //   windows to beep on system keys and other events. Just block all of these
+    if ((message_type >= WM_KEYFIRST   && message_type <= WM_KEYLAST) ||
+         message_type >= WM_MOUSEFIRST && message_type <= WM_MOUSELAST)
+    {
+      DefWindowProcW(window, message_type, w_param, l_param);
+      return 0;
+    }
+
+    BOOL style_changed    = FALSE;
     BOOL need_clip_cursor = FALSE;
+
+    HWND hWndForeground =
+          GetForegroundWindow ();
+
+    if (hWndForeground == hWndGame || GetTopWindow (NULL) == hWndGame) {
+        if (!std::exchange(bWindowFocused, true)) {
+            need_clip_cursor = TRUE;
+            CallWindowProc(OldWndProc, hWndGame, WM_ACTIVATE, WA_CLICKACTIVE, 0);
+        }
+    }
+    else if (! bBackgroundAudio) {
+        if (std::exchange(bWindowFocused, false)) {
+            need_clip_cursor = TRUE;
+            CallWindowProc(OldWndProc, hWndGame, WM_ACTIVATE, WA_INACTIVE, 0);
+        }
+    }
 
     switch (message_type) {
     case WM_SYSCOMMAND:
@@ -971,54 +1016,54 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
 
     case WM_KILLFOCUS:
     case WM_SETFOCUS:
-        bWindowFocused   = (message_type == WM_SETFOCUS);
+    {
         need_clip_cursor = TRUE;
+    } break;
+
+    case WM_ACTIVATE:
+    case WM_ACTIVATEAPP:
+    case WM_NCACTIVATE:
+        // Get styles
+        LONG lStyle   = GetWindowLong(window, GWL_STYLE);
+        LONG lExStyle = GetWindowLong(window, GWL_EXSTYLE);
 
         // Add re-sizable style and enable maximize button
         if (bResizableWindow) {
-            // Get styles
-            LONG lStyle   = GetWindowLong(window, GWL_STYLE);
-            LONG lExStyle = GetWindowLong(window, GWL_EXSTYLE);
-        
             // Check for borderless/fullscreen styles
             if ((lStyle & WS_THICKFRAME) != WS_THICKFRAME && (lStyle & WS_POPUP) == 0 && (lExStyle & WS_EX_TOPMOST) == 0) {
                 // Add resizable + maximize styles
                 lStyle |= (WS_THICKFRAME | WS_MAXIMIZEBOX);
                 SetWindowLong(window, GWL_STYLE, lStyle);
 
-                // Force window to update
-                SetWindowPos(window, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_ASYNCWINDOWPOS);
+                style_changed = TRUE;
             }
         }
-        break;
-
-    case WM_ACTIVATE:
-    case WM_ACTIVATEAPP:
-        if (w_param == WA_INACTIVE) {
-            // Enable background audio
-            if (bBackgroundAudio) {
-                DefWindowProcW(window, message_type, w_param, l_param); // Without this, mouse input would continue working
-                return 0;
-            }
-        }
+        return DefWindowProcW(window, message_type, w_param, l_param);
     }
 
     if (need_clip_cursor)
         ClipCursor_hk(NULL); // The hook will calculate the actual rectangle to use
+
+    if (style_changed) // Force window to update
+      SetWindowPos(window, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE   |
+                                                   SWP_NOSIZE | SWP_NOZORDER | SWP_NOREPOSITION);
 
     return CallWindowProc(OldWndProc, window, message_type, w_param, l_param);
 };
 
 void SubclassGameWindow (HWND hWnd)
 {
-    hWndGame = hWnd;
-
     FARPROC ClipCursor_fn = GetProcAddress(GetModuleHandleW (L"user32.dll"), "ClipCursor");
     ClipCursor_sh = safetyhook::create_inline(ClipCursor_fn, reinterpret_cast<void*>(ClipCursor_hk));
+
+    FARPROC ShowWindow_fn = GetProcAddress(GetModuleHandleW (L"user32.dll"), "ShowWindow");
+    ShowWindow_sh = safetyhook::create_inline(ShowWindow_fn, reinterpret_cast<void*>(ShowWindow_hk));
 
     // Set new wnd proc
     OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)NewWndProc);
     spdlog::info("Window Focus: Subclassed Game Window");
+
+    hWndGame = hWnd;
 }
 
 LRESULT CALLBACK CallWndProcHook (
@@ -1039,6 +1084,23 @@ LRESULT CALLBACK CallWndProcHook (
         if (! wcscmp (wnd_class_name, sWindowClassName)) {
             UnhookWindowsHookEx (hkCallWndProc);
             SubclassGameWindow  (hWndMsg);
+
+            auto lExStyle = GetWindowLongPtrW(hWndGame, GWL_EXSTYLE);
+
+            // The game does not have AppWindow style, so it does not
+            // correctly register itself to appear in the taskbar and
+            // activate the way applications are supposed to...
+            if ((lExStyle & WS_EX_APPWINDOW) == 0) {
+                lExStyle |= WS_EX_APPWINDOW;
+                SetWindowLongPtrW(hWndGame, GWL_EXSTYLE, lExStyle);
+            }
+
+            // Force window to update, and activate it
+            SetWindowPos        (hWndGame, GetForegroundWindow (),
+                                              0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE |
+                                                          SWP_NOSIZE       | SWP_SHOWWINDOW);
+            BringWindowToTop    (hWndGame);
+            SetForegroundWindow (hWndGame);
         }
     }
 
@@ -1072,7 +1134,20 @@ void WindowFocus()
           SetWindowsHookExW (WH_CALLWNDPROC, CallWndProcHook, 0, GetMainThreadId ());
 
         if (hkCallWndProc != 0)
-            Sleep (INFINITE);
+        {
+            // Loop and periodically wake the game's window thread to deal with
+            // stupid handling of window activation by the game
+            MSG msg = {};
+            do
+            {
+                Sleep (250UL);
+
+                if (hWndGame != 0)
+                    SendMessage (hWndGame, WM_NULL, 0, 0);
+
+                PeekMessage (&msg, 0, 0, 0, 0);
+            } while (msg.message != WM_QUIT);
+        }
     }
 }
 
