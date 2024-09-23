@@ -566,6 +566,39 @@ void HUD()
         else if (!PhotoModeBgBlurScanResult) {
             spdlog::error("HUD: Photo Mode Blur: Pattern scan failed.");
         }
+
+        // Fades
+        uint8_t* FadeToBlackScanResult = Memory::PatternScan(baseModule, "89 ?? ?? 44 ?? ?? ?? C6 ?? ?? ?? ?? ?? 01 74 ?? B8 ?? ?? ?? ?? 89 ?? ?? 89 ?? ?? ?? ?? ?? 80 ?? ?? ?? ?? ?? 00");
+        if (FadeToBlackScanResult) {
+            spdlog::info("HUD: Fades: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FadeToBlackScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid FadeToBlackMidHook{};
+            FadeToBlackMidHook = safetyhook::create_mid(FadeToBlackScanResult,
+                [](SafetyHookContext& ctx) {
+                    // Fade to black is 1940x1100. TODO: Add another check here?
+                    if (ctx.rdx == (int)1940 && ctx.r8 == (int)1100) {
+                        if (ctx.rcx + 0x38 && ctx.rcx + 0x3C) {
+                            if (fAspectRatio > fNativeAspect) {
+                                float fWidth = ceilf(1080.00f * fAspectRatio);
+                                float fWidthOffset = ceilf((fWidth - 1920.00f) / 2);
+
+                                ctx.rdx = (int)fWidth;
+                                *reinterpret_cast<int*>(ctx.rcx + 0x38) = (int)-fWidthOffset;
+                            }
+                            else if (fAspectRatio < fNativeAspect) {
+                                float fHeight = ceilf(1920.00f / fAspectRatio);
+                                float fHeightOffset = ceilf((fHeight - 1080.00f) / 2);
+
+                                ctx.r8 = (int)fHeight;
+                                *reinterpret_cast<int*>(ctx.rcx + 0x3C) = (int)-fHeightOffset;
+                            }
+                        }
+                    }
+                });
+        }
+        else if (!FadeToBlackScanResult) {
+            spdlog::error("HUD: Fades: Pattern scan failed.");
+        }
     }
 
     if (bFixMovies) {
