@@ -234,6 +234,8 @@ void Configuration()
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
+    spdlog::info("Config Parse: iWindowedResX: {}", iWindowedResX);
+    spdlog::info("Config Parse: iWindowedResY: {}", iWindowedResY);
     spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
     spdlog::info("Config Parse: iHUDSize: {}", iHUDSize);
     spdlog::info("Config Parse: bFixMovies: {}", bFixMovies);
