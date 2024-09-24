@@ -52,6 +52,7 @@ int iMaxDynRes;
 int iMinDynRes;
 float fDynResFramerate = 0.00f;
 float fDynResLoadLimit = 0.75f;
+float fLODMulti = 1.00f;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -239,6 +240,7 @@ void Configuration()
     inipp::get_value(ini.sections["Dynamic Resolution"], "MinResolution", iMinDynRes);
     inipp::get_value(ini.sections["Dynamic Resolution"], "Framerate", fDynResFramerate);
     inipp::get_value(ini.sections["Dynamic Resolution"], "LoadLimit", fDynResLoadLimit);
+    inipp::get_value(ini.sections["Level of Detail"], "Multiplier", fLODMulti);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -307,13 +309,18 @@ void Configuration()
         spdlog::warn("Config Parse: fDynResFramerate value invalid, clamped to {}", fDynResFramerate);
     }
     spdlog::info("Config Parse: fDynResLoadLimit: {}", fDynResLoadLimit);
+    if ((float)fLODMulti < 0.10f || (float)fLODMulti > 10.00f) {
+        fLODMulti = std::clamp((float)fLODMulti, 0.10f, 10.00f);
+        spdlog::warn("Config Parse: fLODMulti value invalid, clamped to {}", fLODMulti);
+    }
+    spdlog::info("Config Parse: fLODMulti: {}", fLODMulti);
     spdlog::info("----------");
 
     // Grab desktop resolution/aspect
     DesktopDimensions = Util::GetPhysicalDesktopDimensions();
     iCurrentResX = DesktopDimensions.first;
     iCurrentResY = DesktopDimensions.second;
-    CalculateAspectRatio(false);
+    CalculateAspectRatio(true);
 }
 
 void Resolution()
@@ -946,6 +953,24 @@ void Misc()
         }
         else if (!DynamicResFramerateScanResult) {
             spdlog::error("Dynamic Resolution: Framerate: Pattern scan failed.");
+        }
+    }
+
+    if (fLODMulti != 1.00f) {
+        // LOD distance
+        uint8_t* LevelOfDetailScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? C5 ?? ?? ?? 01 C4 ?? ?? ?? ?? ?? C4 ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 84 ?? 74 ??");
+        if (LevelOfDetailScanResult) {
+            spdlog::info("LOD Distance: Framerate: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)LevelOfDetailScanResult - (uintptr_t)baseModule);
+            fLODMulti = 2.00f;
+
+            static SafetyHookMid LevelOfDetailMidHook{};
+            LevelOfDetailMidHook = safetyhook::create_mid(LevelOfDetailScanResult,
+                [](SafetyHookContext& ctx) {
+                    ctx.xmm6.f32[0] *= fLODMulti;
+                });
+        }
+        else if (!LevelOfDetailScanResult) {
+            spdlog::error("LOD Distance: Framerate: Pattern scan failed.");
         }
     }
 }
