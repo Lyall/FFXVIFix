@@ -50,8 +50,6 @@ bool bResizableWindow;
 bool bDisableScreensaver;
 int iMaxDynRes;
 int iMinDynRes;
-float fDynResFramerate = 0.00f;
-float fDynResLoadLimit = 0.75f;
 float fLODMulti = 1.00f;
 
 // Aspect ratio + HUD stuff
@@ -238,8 +236,6 @@ void Configuration()
     inipp::get_value(ini.sections["Game Window"], "DisableScreensaver", bDisableScreensaver);
     inipp::get_value(ini.sections["Dynamic Resolution"], "MaxResolution", iMaxDynRes);
     inipp::get_value(ini.sections["Dynamic Resolution"], "MinResolution", iMinDynRes);
-    inipp::get_value(ini.sections["Dynamic Resolution"], "Framerate", fDynResFramerate);
-    inipp::get_value(ini.sections["Dynamic Resolution"], "LoadLimit", fDynResLoadLimit);
     inipp::get_value(ini.sections["Level of Detail"], "Multiplier", fLODMulti);
 
     spdlog::info("----------");
@@ -299,16 +295,6 @@ void Configuration()
         spdlog::warn("Config Parse: iMinDynRes value invalid, clamped to {}", iMinDynRes);
     }
     spdlog::info("Config Parse: iMinDynRes: {}", iMinDynRes);
-    if ((float)fDynResFramerate < 0.00f || (float)fDynResFramerate > 999.00f) {
-        fDynResFramerate = std::clamp((float)fDynResFramerate, 0.00f, 999.00f);
-        spdlog::warn("Config Parse: fDynResFramerate value invalid, clamped to {}", fDynResFramerate);
-    }
-    spdlog::info("Config Parse: fDynResFramerate: {}", fDynResLoadLimit);
-    if ((float)fDynResLoadLimit < 0.10f || (float)fDynResLoadLimit > 1.00f) {
-        fDynResLoadLimit = std::clamp((float)fDynResLoadLimit, 0.10f, 1.00f);
-        spdlog::warn("Config Parse: fDynResFramerate value invalid, clamped to {}", fDynResFramerate);
-    }
-    spdlog::info("Config Parse: fDynResLoadLimit: {}", fDynResLoadLimit);
     if ((float)fLODMulti < 0.10f || (float)fLODMulti > 10.00f) {
         fLODMulti = std::clamp((float)fLODMulti, 0.10f, 10.00f);
         spdlog::warn("Config Parse: fLODMulti value invalid, clamped to {}", fLODMulti);
@@ -919,40 +905,6 @@ void Misc()
         }
         else if (!DynamicResBoundsScanResult) {
             spdlog::error("Dynamic Resolution: Bounds: Pattern scan failed.");
-        }
-    }
-
-    if (fDynResLoadLimit != 0.75f) {
-        // Dynamic resolution load limit
-        uint8_t* DynamicResLoadScanResult = Memory::PatternScan(baseModule, "C4 ?? ?? ?? ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? C5 ?? ?? ?? 84 ?? 0F 84 ?? ?? ?? ?? 8B ?? ?? ?? ?? ??");
-        if (DynamicResLoadScanResult) {
-            spdlog::info("Dynamic Resolution: Load Limit: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)DynamicResLoadScanResult - (uintptr_t)baseModule);
-
-            static SafetyHookMid DynamicResLoadMidHook{};
-            DynamicResLoadMidHook = safetyhook::create_mid(DynamicResLoadScanResult,
-                [](SafetyHookContext& ctx) {
-                    ctx.xmm0.f32[0] = fDynResLoadLimit;
-                });
-        }
-        else if (!DynamicResLoadScanResult) {
-            spdlog::error("Dynamic Resolution: Load Limit: Pattern scan failed.");
-        }
-    }
- 
-    if (fDynResFramerate != 0.00f) {
-        // Dynamic resolution framerate target
-        uint8_t* DynamicResFramerateScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? C5 ?? ?? ?? 01 C4 ?? ?? ?? ?? ?? C4 ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 84 ?? 74 ??");
-        if (DynamicResFramerateScanResult) {
-            spdlog::info("Dynamic Resolution: Framerate: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)DynamicResFramerateScanResult - (uintptr_t)baseModule);
-
-            static SafetyHookMid DynamicResFramerateMidHook{};
-            DynamicResFramerateMidHook = safetyhook::create_mid(DynamicResFramerateScanResult + 0x4,
-                [](SafetyHookContext& ctx) {
-                    ctx.xmm3.f32[0] = (1.00f / fDynResFramerate) * 1000.00f;
-                });
-        }
-        else if (!DynamicResFramerateScanResult) {
-            spdlog::error("Dynamic Resolution: Framerate: Pattern scan failed.");
         }
     }
 
