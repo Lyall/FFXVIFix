@@ -1202,9 +1202,23 @@ LRESULT CALLBACK CallWndProcHook (
             }
 
             // Force window to update, and activate it
-            SetWindowPos        (hWndGame, GetForegroundWindow (),
-                                              0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE |
-                                                          SWP_NOSIZE       | SWP_SHOWWINDOW);
+            if (GetActiveWindow() == hWndGame)
+            {
+                SetWindowPos(hWndGame, GetForegroundWindow (),
+                             0, 0, 0, 0, SWP_FRAMECHANGED  | SWP_NOMOVE     |
+                                         SWP_NOSIZE        | SWP_SHOWWINDOW |
+                                         SWP_NOOWNERZORDER | SWP_NOZORDER );
+            }
+
+            else
+            {
+                SetWindowPos(hWndGame, GetForegroundWindow (),
+                             0, 0, 0, 0, SWP_FRAMECHANGED  | SWP_NOMOVE     |
+                                         SWP_NOSIZE        | SWP_SHOWWINDOW |
+                                         SWP_NOOWNERZORDER | SWP_NOZORDER   |
+                                         SWP_ASYNCWINDOWPOS);
+            }
+
             BringWindowToTop    (hWndGame);
             SetForegroundWindow (hWndGame);
         }
@@ -1246,7 +1260,7 @@ void WindowFocus()
             MSG msg = {};
             do
             {
-                Sleep (250UL);
+                Sleep (666UL);
 
                 if (hWndGame != 0)
                     SendMessage (hWndGame, WM_NULL, 0, 0);
