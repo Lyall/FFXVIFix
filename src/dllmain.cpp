@@ -1039,6 +1039,22 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
 
     if (hWndForeground == hWndGame || GetTopWindow (NULL) == hWndGame) {
         if (!std::exchange(bWindowFocused, true)) {
+            // Get styles
+            LONG lStyle   = GetWindowLong(window, GWL_STYLE);
+            LONG lExStyle = GetWindowLong(window, GWL_EXSTYLE);
+
+            // Add re-sizable style and enable maximize button
+            if (bResizableWindow) {
+                // Check for borderless/fullscreen styles
+                if ((lStyle & WS_THICKFRAME) != WS_THICKFRAME && (lStyle & WS_POPUP) == 0 && (lExStyle & WS_EX_TOPMOST) == 0) {
+                    // Add resizable + maximize styles
+                    lStyle |= (WS_THICKFRAME | WS_MAXIMIZEBOX);
+                    SetWindowLong(window, GWL_STYLE, lStyle);
+
+                    style_changed = TRUE;
+                }
+            }
+
             need_clip_cursor = TRUE;
             CallWindowProc(OldWndProc, hWndGame, WM_ACTIVATE, WA_CLICKACTIVE, 0);
         }
@@ -1081,21 +1097,6 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
     case WM_ACTIVATE:
     case WM_ACTIVATEAPP:
     case WM_NCACTIVATE:
-        // Get styles
-        LONG lStyle   = GetWindowLong(window, GWL_STYLE);
-        LONG lExStyle = GetWindowLong(window, GWL_EXSTYLE);
-
-        // Add re-sizable style and enable maximize button
-        if (bResizableWindow) {
-            // Check for borderless/fullscreen styles
-            if ((lStyle & WS_THICKFRAME) != WS_THICKFRAME && (lStyle & WS_POPUP) == 0 && (lExStyle & WS_EX_TOPMOST) == 0) {
-                // Add resizable + maximize styles
-                lStyle |= (WS_THICKFRAME | WS_MAXIMIZEBOX);
-                SetWindowLong(window, GWL_STYLE, lStyle);
-
-                style_changed = TRUE;
-            }
-        }
         return DefWindowProcW(window, message_type, w_param, l_param);
     }
 
@@ -1152,27 +1153,6 @@ LRESULT CALLBACK CallWndProcHook (
                 lExStyle |= WS_EX_APPWINDOW;
                 SetWindowLongPtrW(hWndGame, GWL_EXSTYLE, lExStyle);
             }
-
-            // Force window to update, and activate it
-            if (GetActiveWindow() == hWndGame)
-            {
-                SetWindowPos(hWndGame, GetForegroundWindow (),
-                             0, 0, 0, 0, SWP_FRAMECHANGED  | SWP_NOMOVE     |
-                                         SWP_NOSIZE        | SWP_SHOWWINDOW |
-                                         SWP_NOOWNERZORDER | SWP_NOZORDER );
-            }
-
-            else
-            {
-                SetWindowPos(hWndGame, GetForegroundWindow (),
-                             0, 0, 0, 0, SWP_FRAMECHANGED  | SWP_NOMOVE     |
-                                         SWP_NOSIZE        | SWP_SHOWWINDOW |
-                                         SWP_NOOWNERZORDER | SWP_NOZORDER   |
-                                         SWP_ASYNCWINDOWPOS);
-            }
-
-            BringWindowToTop    (hWndGame);
-            SetForegroundWindow (hWndGame);
         }
     }
 
