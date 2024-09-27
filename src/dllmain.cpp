@@ -47,6 +47,7 @@ float fJXLQuality = 75.0f;
 int iJXLThreads = 1;
 bool bDisableDbgCheck;
 bool bDisableDOF;
+bool bDisableCinematicEffects;
 bool bBackgroundAudio;
 bool bLockCursor;
 bool bResizableWindow;
@@ -236,6 +237,7 @@ void Configuration()
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "Quality", fJXLQuality);
     inipp::get_value(ini.sections["Disable Graphics Debugger Check"], "Enabled", bDisableDbgCheck);
     inipp::get_value(ini.sections["Disable Depth of Field"], "Enabled", bDisableDOF);
+    inipp::get_value(ini.sections["Disable Cinematic Effects"], "Enabled", bDisableCinematicEffects);
     inipp::get_value(ini.sections["Game Window"], "BackgroundAudio", bBackgroundAudio);
     inipp::get_value(ini.sections["Game Window"], "LockCursor", bLockCursor);
     inipp::get_value(ini.sections["Game Window"], "Resizable", bResizableWindow);
@@ -298,6 +300,7 @@ void Configuration()
     spdlog::info("Config Parse: fJXLQuality: {}", fJXLQuality);
     spdlog::info("Config Parse: bDisableDbgCheck: {}", bDisableDbgCheck);
     spdlog::info("Config Parse: bDisableDOF: {}", bDisableDOF);
+    spdlog::info("Config Parse: bDisableCinematicEffects: {}", bDisableCinematicEffects);
     spdlog::info("Config Parse: bBackgroundAudio: {}", bBackgroundAudio);
     spdlog::info("Config Parse: bLockCursor: {}", bLockCursor);
     spdlog::info("Config Parse: bResizableWindow: {}", bResizableWindow);
@@ -927,6 +930,29 @@ void Misc()
         }
         else if (!DepthofFieldScanResult || !NearDepthofFieldScanResult) {
             spdlog::error("Disable Depth of Field: Pattern scan failed.");
+        }
+    }
+
+    if (bDisableCinematicEffects) {
+        // Disable cinematic effects (thanks FransBouma!)
+        uint8_t* CinematicEffectsScanResult = Memory::PatternScan(baseModule, "89 ?? ?? C1 ?? ?? 41 ?? ?? 74 ?? C6 ?? ?? ?? EB ?? 8B ??");
+        if (CinematicEffectsScanResult) {
+            spdlog::info("Cinematic Effects: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CinematicEffectsScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid CinematicEffectsMidHook{};
+            CinematicEffectsMidHook = safetyhook::create_mid(CinematicEffectsScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (ctx.rcx & 0x0B) {
+                        ctx.rcx = (ctx.rcx & ~0xFF) | 0x03;
+                    }
+                        
+                    if (ctx.rcx & 0x13) {
+                        ctx.rcx = (ctx.rcx & ~0xFF) | 0x03;
+                    }
+                });
+        }
+        else if (!CinematicEffectsScanResult) {
+            spdlog::error("Cinematic Effects: Pattern scan failed.");
         }
     }
 
