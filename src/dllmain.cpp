@@ -35,6 +35,7 @@ bool bFixMovies;
 bool bFixFOV;
 float fGameplayCamFOV;
 float fGameplayCamHorPos;
+float fGameplayCamVertPos;
 float fGameplayCamDistMulti;
 bool bUncapFPS;
 float fFPSCap;
@@ -256,6 +257,11 @@ void Configuration()
         spdlog::warn("Config Parse: fGameplayCamHorPos value invalid, clamped to {}", fGameplayCamHorPos);
     }
     spdlog::info("Config Parse: fGameplayCamHorPos: {}", fGameplayCamHorPos);
+    if (fGameplayCamVertPos < -5.00f || fGameplayCamVertPos > 5.00f) {
+        fGameplayCamVertPos = std::clamp(fGameplayCamVertPos, -5.00f, 5.00f);
+        spdlog::warn("Config Parse: fGameplayCamVertPos value invalid, clamped to {}", fGameplayCamVertPos);
+    }
+    spdlog::info("Config Parse: fGameplayCamVertPos: {}", fGameplayCamVertPos);
     if (fGameplayCamDistMulti < 0.10f || fGameplayCamDistMulti > 10.00f) {
         fGameplayCamDistMulti = std::clamp(fGameplayCamDistMulti, 0.10f, 10.00f);
         spdlog::warn("Config Parse: fGameplayCamDistMulti value invalid, clamped to {}", fGameplayCamDistMulti);
@@ -716,7 +722,7 @@ void HUD()
     }
 }
 
-void FOV()
+void Camera()
 {
     if (bFixFOV) { 
         // Fix <16:9 FOV
@@ -757,20 +763,24 @@ void FOV()
         }
     }
 
-    if (fGameplayCamHorPos != 0.95f) {
-        // Gameplay Camera Horizontal Position
-        uint8_t* GameplayCameraHorPosScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 8B ?? 41 ?? ?? 48 8D ?? ?? E8 ?? ?? ?? ??");
-        if (GameplayCameraHorPosScanResult) {
-            spdlog::info("Gameplay Camera: Horizontal Position: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayCameraHorPosScanResult - (uintptr_t)baseModule);
+    if (fGameplayCamHorPos != 0.95f || fGameplayCamVertPos != -0.65f) {
+        // Gameplay Camera Position
+        uint8_t* GameplayCameraPosScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 8B ?? 41 ?? ?? 48 8D ?? ?? E8 ?? ?? ?? ??");
+        if (GameplayCameraPosScanResult) {
+            spdlog::info("Gameplay Camera: Position: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayCameraPosScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid GameplayCameraHorPosMidHook{};
-            GameplayCameraHorPosMidHook = safetyhook::create_mid(GameplayCameraHorPosScanResult + 0x8,
+            GameplayCameraHorPosMidHook = safetyhook::create_mid(GameplayCameraPosScanResult + 0x8,
                 [](SafetyHookContext& ctx) {
+                    if (fGameplayCamHorPos != 0.95f) 
                     ctx.xmm1.f32[0] = fGameplayCamHorPos;
+
+                    if (fGameplayCamVertPos != -0.65f)
+                    ctx.xmm2.f32[0] = fGameplayCamVertPos;
                 });
         }
-        else if (!GameplayCameraHorPosScanResult) {
-            spdlog::error("Gameplay Camera: Horizontal Position: Pattern scan failed.");
+        else if (!GameplayCameraPosScanResult) {
+            spdlog::error("Gameplay Camera: Position: Pattern scan failed.");
         }
     }
 
@@ -1209,7 +1219,7 @@ DWORD __stdcall Main(void*)
     Configuration();
     Resolution();
     HUD();
-    FOV();
+    Camera();
     Framerate();
     Misc();
     JXL();
