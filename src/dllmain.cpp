@@ -222,6 +222,7 @@ void Configuration()
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay Camera"], "AdditionalFOV", fGameplayCamFOV);
     inipp::get_value(ini.sections["Gameplay Camera"], "HorizontalPos", fGameplayCamHorPos);
+    inipp::get_value(ini.sections["Gameplay Camera"], "VerticalPos", fGameplayCamVertPos);
     inipp::get_value(ini.sections["Gameplay Camera"], "DistanceMultiplier", fGameplayCamDistMulti);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Framerate", fFPSCap);
