@@ -39,6 +39,8 @@ float fGameplayCamVertPos;
 float fGameplayCamDistMulti;
 bool bUncapFPS;
 float fFPSCap;
+bool bCustomFPS;
+float fCustomFPS;
 bool bCutsceneFramegen;
 bool bMotionBlurFramegen;
 float fJXLQuality = 75.0f;
@@ -226,6 +228,8 @@ void Configuration()
     inipp::get_value(ini.sections["Gameplay Camera"], "DistanceMultiplier", fGameplayCamDistMulti);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Enabled", bUncapFPS);
     inipp::get_value(ini.sections["Remove 30FPS Cap"], "Framerate", fFPSCap);
+    inipp::get_value(ini.sections["Custom Framerate"], "Enabled", bCustomFPS);
+    inipp::get_value(ini.sections["Custom Framerate"], "Framerate", fCustomFPS);
     inipp::get_value(ini.sections["Cutscene Frame Generation"], "Enabled", bCutsceneFramegen);
     inipp::get_value(ini.sections["Motion Blur + Frame Generation"], "Enabled", bMotionBlurFramegen);
     inipp::get_value(ini.sections["JPEG XL Tweaks"], "NumThreads", iJXLThreads);
@@ -274,6 +278,12 @@ void Configuration()
         spdlog::warn("Config Parse: fFPSCap value invalid, set to {}", fFPSCap);
     }
     spdlog::info("Config Parse: fFPSCap: {}", fFPSCap);
+    spdlog::info("Config Parse: bCustomFPS: {}", bCustomFPS);
+    if (fCustomFPS < 10.00f) { // Don't go lower than 10fps if someone messes up.
+        fCustomFPS = 10.00f;
+        spdlog::warn("Config Parse: fCustomFPS value invalid, set to {}", fCustomFPS);
+    }
+    spdlog::info("Config Parse: fCustomFPS: {}", fCustomFPS);
     spdlog::info("Config Parse: bCutsceneFramegen: {}", bCutsceneFramegen);
     spdlog::info("Config Parse: bMotionBlurFramegen: {}", bMotionBlurFramegen);
     if (iJXLThreads > (int)std::thread::hardware_concurrency() || iJXLThreads < 1 ) {
@@ -842,6 +852,27 @@ void Framerate()
         }
         else if (!CutsceneFramegenScanResult) {
             spdlog::error("FPS: Cutscene Frame Generation: Pattern scan failed.");
+        }
+    }
+
+    if (bCustomFPS && fCustomFPS != 30.00f) {
+        uint8_t* GameplayFramerateCapScanResult = Memory::PatternScan(baseModule, "48 ?? ?? ?? ?? 48 ?? ?? ?? ?? ?? ?? 48 ?? ?? 4D ?? ?? 4C ?? ?? 74 ??");
+        if (GameplayFramerateCapScanResult) {
+            spdlog::info("FPS: Custom Framerate: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayFramerateCapScanResult - (uintptr_t)baseModule);
+            static SafetyHookMid GameplayFramerateCapMidHook{};
+            GameplayFramerateCapMidHook = safetyhook::create_mid(GameplayFramerateCapScanResult,
+                [](SafetyHookContext& ctx) {
+                    int iNumerator = static_cast<int>(ctx.rdx & 0xFFFFFFFF);
+                    int iDenominator = static_cast<int>((ctx.rdx >> 32) & 0xFFFFFFFF);
+
+                    // Replace 30.00 FPS value
+                    if (iNumerator == 120 && iDenominator == 4) {
+                        ctx.rdx = (static_cast<uintptr_t>(100) << 32) | (static_cast<uintptr_t>(static_cast<int>(fCustomFPS * 100.00f)));
+                    }
+                });
+        }
+        else if (!GameplayFramerateCapScanResult) {
+            spdlog::error("FPS: Custom Framerate: Pattern scan failed.");
         }
     }
 }
