@@ -11,7 +11,7 @@ HMODULE thisModule; // Fix DLL
 
 // Version
 std::string sFixName = "FFXVIFix";
-std::string sFixVer = "0.8.4";
+std::string sFixVer = "0.8.5";
 std::string sLogFile = sFixName + ".log";
 
 // Logger
@@ -52,9 +52,16 @@ bool bBackgroundAudio;
 bool bLockCursor;
 bool bResizableWindow;
 bool bDisableScreensaver;
+bool bAdjustStaggerTimers;
+bool bAdjustDamageOutput;
 int iMaxDynRes;
 int iMinDynRes;
 float fLODMulti = 1.00f;
+float fStaggerTimerMultiplierType1 = 1.0f;
+float fStaggerTimerMultiplierType2 = 1.0f;
+float fStaggerTimerMultiplierType3 = 1.0f;
+float fHealthDamageScale = 1.0f;
+float fWillDamageScale = 1.0f;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -245,6 +252,13 @@ void Configuration()
     inipp::get_value(ini.sections["Dynamic Resolution"], "MaxResolution", iMaxDynRes);
     inipp::get_value(ini.sections["Dynamic Resolution"], "MinResolution", iMinDynRes);
     inipp::get_value(ini.sections["Level of Detail"], "Multiplier", fLODMulti);
+	inipp::get_value(ini.sections["Gameplay Tweaks"], "AdjustStaggerTimers", bAdjustStaggerTimers);
+	inipp::get_value(ini.sections["Gameplay Tweaks"], "AdjustDamageOutput", bAdjustDamageOutput);
+	inipp::get_value(ini.sections["Gameplay Tweaks"], "StaggerTimerMultiplierType1", fStaggerTimerMultiplierType1);
+	inipp::get_value(ini.sections["Gameplay Tweaks"], "StaggerTimerMultiplierType2", fStaggerTimerMultiplierType2);
+	inipp::get_value(ini.sections["Gameplay Tweaks"], "StaggerTimerMultiplierType3", fStaggerTimerMultiplierType3);
+	inipp::get_value(ini.sections["Gameplay Tweaks"], "HealthDamageScale", fHealthDamageScale);
+	inipp::get_value(ini.sections["Gameplay Tweaks"], "WillDamageScale", fWillDamageScale);
 
     spdlog::info("----------");
     spdlog::info("Config Parse: bFixResolution: {}", bFixResolution);
@@ -312,21 +326,55 @@ void Configuration()
     spdlog::info("Config Parse: iMaxDynRes: {}", iMaxDynRes);
     if (iMinDynRes < 50 || iMinDynRes > 100) {
         iMinDynRes = std::clamp(iMinDynRes, 50, 100);
-        spdlog::warn("Config Parse: iMinDynRes value invalid, clamped to {}", iMinDynRes);
-    }
-    spdlog::info("Config Parse: iMinDynRes: {}", iMinDynRes);
-    if ((float)fLODMulti < 0.10f || (float)fLODMulti > 10.00f) {
-        fLODMulti = std::clamp((float)fLODMulti, 0.10f, 10.00f);
-        spdlog::warn("Config Parse: fLODMulti value invalid, clamped to {}", fLODMulti);
-    }
-    spdlog::info("Config Parse: fLODMulti: {}", fLODMulti);
-    spdlog::info("----------");
+		spdlog::warn("Config Parse: iMinDynRes value invalid, clamped to {}", iMinDynRes);
+	}
+	spdlog::info("Config Parse: iMinDynRes: {}", iMinDynRes);
+	if ((float)fLODMulti < 0.10f || (float)fLODMulti > 10.00f) {
+		fLODMulti = std::clamp((float)fLODMulti, 0.10f, 10.00f);
+		spdlog::warn("Config Parse: fLODMulti value invalid, clamped to {}", fLODMulti);
+	}
+	spdlog::info("Config Parse: fLODMulti: {}", fLODMulti);
 
-    // Grab desktop resolution/aspect
-    DesktopDimensions = Util::GetPhysicalDesktopDimensions();
-    iCurrentResX = DesktopDimensions.first;
-    iCurrentResY = DesktopDimensions.second;
-    CalculateAspectRatio(true);
+	if ((float)fStaggerTimerMultiplierType1 < 0.00f || (float)fStaggerTimerMultiplierType1 > 100.00f) {
+		fStaggerTimerMultiplierType1 = std::clamp((float)fStaggerTimerMultiplierType1, 0.00f, 100.00f);
+		spdlog::warn("Config Parse: fStaggerTimerMultiplierType1 value invalid, clamped to {}", fStaggerTimerMultiplierType1);
+	}
+	spdlog::info("Config Parse: fStaggerTimerMultiplierType1: {}", fStaggerTimerMultiplierType1);
+
+	if ((float)fStaggerTimerMultiplierType2 < 0.00f || (float)fStaggerTimerMultiplierType2 > 100.00f) {
+		fStaggerTimerMultiplierType2 = std::clamp((float)fStaggerTimerMultiplierType2, 0.00f, 100.00f);
+		spdlog::warn("Config Parse: fStaggerTimerMultiplierType2 value invalid, clamped to {}", fStaggerTimerMultiplierType2);
+	}
+	spdlog::info("Config Parse: fStaggerTimerMultiplierType2: {}", fStaggerTimerMultiplierType2);
+
+	if ((float)fStaggerTimerMultiplierType3 < 0.00f || (float)fStaggerTimerMultiplierType3 > 100.00f) {
+		fStaggerTimerMultiplierType3 = std::clamp((float)fStaggerTimerMultiplierType3, 0.00f, 100.00f);
+		spdlog::warn("Config Parse: fStaggerTimerMultiplierType3 value invalid, clamped to {}", fStaggerTimerMultiplierType3);
+	}
+	spdlog::info("Config Parse: fStaggerTimerMultiplierType3: {}", fStaggerTimerMultiplierType3);
+
+	if ((float)fHealthDamageScale < 0.05f || (float)fHealthDamageScale > 100.00f) {
+		fHealthDamageScale = std::clamp((float)fHealthDamageScale, 0.05f, 100.00f);
+		spdlog::warn("Config Parse: fHealthDamageScale value invalid, clamped to {}", fHealthDamageScale);
+	}
+	spdlog::info("Config Parse: fHealthDamageScale: {}", fHealthDamageScale);
+
+	if ((float)fWillDamageScale < 0.00f || (float)fWillDamageScale > 100.00f) {
+		fWillDamageScale = std::clamp((float)fWillDamageScale, 0.00f, 100.00f);
+		spdlog::warn("Config Parse: fWillDamageScale value invalid, clamped to {}", fWillDamageScale);
+	}
+	spdlog::info("Config Parse: fWillDamageScale: {}", fWillDamageScale);
+
+	spdlog::info("Config Parse: bAdjustStaggerTimers: {}", bAdjustStaggerTimers);
+	spdlog::info("Config Parse: bAdjustDamageOutput: {}", bAdjustDamageOutput);
+
+	spdlog::info("----------");
+
+	// Grab desktop resolution/aspect
+	DesktopDimensions = Util::GetPhysicalDesktopDimensions();
+	iCurrentResX = DesktopDimensions.first;
+	iCurrentResY = DesktopDimensions.second;
+	CalculateAspectRatio(true);
 }
 
 void Resolution()
@@ -1271,6 +1319,129 @@ void WindowFocus()
     }
 }
 
+
+enum eStaggerType {
+	NONE = 0,
+	FULL = 1, /* damage multiplier active */
+	PARTIAL = 2, /* 50% stagger, no trash mob armor */
+	FULL2 = 3, /* damage multiplier active */
+};
+
+enum eWillBarHalf {
+	LEFT = 0,
+	RIGHT = 1
+};
+
+typedef struct {
+	/* 0x00 */ unsigned char unk_0x00[0x40];
+	/* 0x40 */ unsigned int Health;
+	/* 0x44 */ unsigned char unk_0x44[0x14];
+	/* 0x58 */ unsigned int StaggerType;
+	/* 0x5C */ unsigned char Prone; /* Nonzero when entity is laying on the ground, used to detect when you can Mortal Blow. Forcing this to a nonzero value allows you to mortal blow enemies who would otherwise be unable to go prone. */
+	/* 0x5D */ unsigned char unk_0x5D[0x07];
+	/* 0x64 */ unsigned int Will;
+	/* 0x68 */ float StaggerTimer; /* Time remaining for the current stagger. This does not include half staggers, but does include trash mobs' super armor. */
+	/* 0x6C */ float StaggerTimer1; /* unsure what this is for, it is set with eStaggerType::FULL, possibly initial stagger timer, or stagger timer length? */
+	/* 0x70 */ float unk_0x70;
+	/* 0x74 */ unsigned char WillBarHalf; /* For enemies with will bars, determines the half of the will bar we are using. 0 = right, 1 = left. When Will reaches 0, if it is on the right, it switches to the left, and Will resets. */
+	/* 0x75 */ unsigned char WillBarHalf1; /* Similar to the above value, but I'm not sure of it's purpose. */
+	/* 0x76 */ unsigned char unk_0x76[0x02];
+	/* 0x78 */ unsigned int StaggerDamageDealt; /* Raw damage dealth when an enemy is fully staggered. Used to determine damage multiplier? */
+	/* 0x7C */ unsigned int StaggerDamageDealtScaled; /* Damage dealth after the damage multiplier when an enemy is fully staggered, what is displayed in the "Stagger Damage" message. */
+} CombatActor;
+
+static SafetyHookInline sNormalDamageInlineHook{};
+static SafetyHookInline sWillDamageInlineHook{};
+
+unsigned char GameplayTweak_NormalDamageHook(CombatActor* thisx, int healthDelta) {
+	healthDelta *= fHealthDamageScale;
+	return sNormalDamageInlineHook.call<unsigned char>(thisx, healthDelta);
+}
+
+int GameplayTweak_WillDamageHook(CombatActor* thisx, int willDelta, unsigned char arg3, unsigned char arg4) {
+	willDelta *= fWillDamageScale;
+	return sWillDamageInlineHook.call<int>(thisx, willDelta, arg3, arg4);
+}
+
+void GameplayTweaks()
+{
+	if (bAdjustStaggerTimers) {
+		// 
+		// type 2
+		uint8_t* FullStaggerScanResult = Memory::PatternScan(baseModule, "c5 fa 11 43 ?? c5 fa 11 43 ?? c7 43 ?? 01 00 00 00");
+		if (FullStaggerScanResult) {
+			spdlog::info("Stagger Type 2: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FullStaggerScanResult - (uintptr_t)baseModule);
+			static SafetyHookMid FullStaggerMidHook{};
+			FullStaggerMidHook = safetyhook::create_mid(FullStaggerScanResult,
+				[](SafetyHookContext& ctx) {
+					ctx.xmm0.f32[0] *= fStaggerTimerMultiplierType2;
+				});
+		}
+		else if (!FullStaggerScanResult) {
+			spdlog::error("Stagger Type 2: Pattern scan failed.");
+		}
+
+		// type 3
+		uint8_t* FullStaggerScanResult2 = Memory::PatternScan(baseModule, "c5 fa 11 73 ?? c5 fa 11 73 ?? 88 43 ?? c7");
+		if (FullStaggerScanResult2) {
+			spdlog::info("Stagger Type 3: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FullStaggerScanResult2 - (uintptr_t)baseModule);
+			static SafetyHookMid FullStaggerMidHook2{};
+			FullStaggerMidHook2 = safetyhook::create_mid(FullStaggerScanResult2,
+				[](SafetyHookContext& ctx) {
+					ctx.xmm6.f32[0] *= fStaggerTimerMultiplierType3;
+				});
+			spdlog::info("Stagger Type 3: OK");
+		}
+		else if (!FullStaggerScanResult2) {
+			spdlog::error("Stagger Type 3: Pattern scan failed.");
+		}
+
+		// type 1
+		uint8_t* PartialStaggerScanResult = Memory::PatternScan(baseModule, "41 8b 41 ?? 89 43 ?? eb");
+		if (PartialStaggerScanResult) {
+			spdlog::info("Stagger Type 1: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)PartialStaggerScanResult - (uintptr_t)baseModule);
+			static SafetyHookMid PartialStaggerMidHook{};
+			static SafetyHookInline PartialStaggerInlineHook{};
+
+			// effectively creating a code cave here
+			Memory::PatchBytes((uintptr_t)PartialStaggerScanResult, "\x90\x90\x90\x90\x90\x90\x90", 7);
+			PartialStaggerMidHook = safetyhook::create_mid(PartialStaggerScanResult,
+				[](SafetyHookContext& ctx) {
+					if (ctx.r9 != 0) {
+						float original = *reinterpret_cast<float*>(ctx.r9 + 0x7C);
+						reinterpret_cast<CombatActor*>(ctx.rbx)->StaggerTimer = original * fStaggerTimerMultiplierType1;
+					}
+				});
+		}
+		else if (!PartialStaggerScanResult) {
+			spdlog::error("Stagger Type 1: Pattern scan failed.");
+		}
+	}
+
+	if (bAdjustDamageOutput) {
+		uint8_t* NormalDamageScanResult = Memory::PatternScan(baseModule, "48 89 5c 24 08 48 89 74 24 10 48 89 7c 24 18 41 56 48 83 ec ?? 8b fa");
+		if (NormalDamageScanResult) {
+			spdlog::info("Normal Damage: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)NormalDamageScanResult - (uintptr_t)baseModule);
+			sNormalDamageInlineHook = safetyhook::create_inline(reinterpret_cast<void*>(NormalDamageScanResult), GameplayTweak_NormalDamageHook);
+			spdlog::info("Normal Damage: Hooked.");
+		}
+		else if (!NormalDamageScanResult) {
+			spdlog::error("Normal Damage: Pattern scan failed.");
+		}
+
+		uint8_t* WillDamageScanResult = Memory::PatternScan(baseModule, "48 89 5c 24 08 56 48 83 ec ?? 41 8a f1 48 8b d9 85 d2");
+		if (WillDamageScanResult) {
+			spdlog::info("Will Damage: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)WillDamageScanResult - (uintptr_t)baseModule);
+			sWillDamageInlineHook = safetyhook::create_inline(reinterpret_cast<void*>(WillDamageScanResult), GameplayTweak_WillDamageHook);
+			spdlog::info("Will Damage: Hooked.");
+		}
+		else if (!WillDamageScanResult) {
+			spdlog::error("Will Damage: Pattern scan failed.");
+		}
+	}
+}
+
+
 DWORD __stdcall Main(void*)
 {
     Logging();
@@ -1280,6 +1451,7 @@ DWORD __stdcall Main(void*)
     Camera();
     Framerate();
     Misc();
+	GameplayTweaks();
     JXL();
     WindowFocus();
     return true;
