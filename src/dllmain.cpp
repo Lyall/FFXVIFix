@@ -60,6 +60,7 @@ float fLODMulti = 1.00f;
 float fStaggerTimerMultiplierType1 = 1.0f;
 float fStaggerTimerMultiplierType2 = 1.0f;
 float fStaggerTimerMultiplierType3 = 1.0f;
+float fCliveDamageScale = 1.0f;
 float fHealthDamageScale = 1.0f;
 float fWillDamageScale = 1.0f;
 
@@ -258,6 +259,7 @@ void Configuration()
 	inipp::get_value(ini.sections["Gameplay Tweaks"], "StaggerTimerMultiplierType2", fStaggerTimerMultiplierType2);
 	inipp::get_value(ini.sections["Gameplay Tweaks"], "StaggerTimerMultiplierType3", fStaggerTimerMultiplierType3);
 	inipp::get_value(ini.sections["Gameplay Tweaks"], "HealthDamageScale", fHealthDamageScale);
+	inipp::get_value(ini.sections["Gameplay Tweaks"], "CliveDamageScale", fCliveDamageScale);
 	inipp::get_value(ini.sections["Gameplay Tweaks"], "WillDamageScale", fWillDamageScale);
 
     spdlog::info("----------");
@@ -358,6 +360,12 @@ void Configuration()
 		spdlog::warn("Config Parse: fHealthDamageScale value invalid, clamped to {}", fHealthDamageScale);
 	}
 	spdlog::info("Config Parse: fHealthDamageScale: {}", fHealthDamageScale);
+
+	if ((float)fCliveDamageScale < 0.05f || (float)fCliveDamageScale > 100.00f) {
+		fCliveDamageScale = std::clamp((float)fCliveDamageScale, 0.05f, 100.00f);
+		spdlog::warn("Config Parse: fCliveDamageScale value invalid, clamped to {}", fCliveDamageScale);
+	}
+	spdlog::info("Config Parse: fCliveDamageScale: {}", fCliveDamageScale);
 
 	if ((float)fWillDamageScale < 0.00f || (float)fWillDamageScale > 100.00f) {
 		fWillDamageScale = std::clamp((float)fWillDamageScale, 0.00f, 100.00f);
@@ -1354,7 +1362,17 @@ static SafetyHookInline sNormalDamageInlineHook{};
 static SafetyHookInline sWillDamageInlineHook{};
 
 unsigned char GameplayTweak_NormalDamageHook(CombatActor* thisx, int healthDelta) {
-	healthDelta *= fHealthDamageScale;
+	// likely bad assumptions
+	uint32_t unk_0x18 = *reinterpret_cast<uint32_t*>((intptr_t)thisx + 0x18);
+	uint32_t unk_0x38 = *reinterpret_cast<uint32_t*>((intptr_t)thisx + 0x38);
+	spdlog::info("unk_0x18 {} unk_0x38: {}", unk_0x18, unk_0x38);
+	if (unk_0x18 == 0 && unk_0x38 == 1) {
+		healthDelta *= fCliveDamageScale;
+	}
+	else {
+		healthDelta *= fHealthDamageScale;
+	}
+
 	return sNormalDamageInlineHook.call<unsigned char>(thisx, healthDelta);
 }
 
