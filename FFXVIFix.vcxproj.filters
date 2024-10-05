@@ -27,6 +27,9 @@
     <ClInclude Include="external\safetyhook\safetyhook.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\GameObject.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\dllmain.cpp">
