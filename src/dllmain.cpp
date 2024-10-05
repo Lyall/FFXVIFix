@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "helper.hpp"
+#include "GameObject.h"
 
 #include <inipp/inipp.h>
 #include <spdlog/spdlog.h>
@@ -1327,46 +1328,11 @@ void WindowFocus()
     }
 }
 
-
-enum eStaggerType {
-	NONE = 0,
-	FULL = 1, /* damage multiplier active */
-	PARTIAL = 2, /* 50% stagger, no trash mob armor */
-	FULL2 = 3, /* damage multiplier active */
-};
-
-enum eWillBarHalf {
-	LEFT = 0,
-	RIGHT = 1
-};
-
-typedef struct {
-	/* 0x00 */ unsigned char unk_0x00[0x40];
-	/* 0x40 */ unsigned int Health;
-	/* 0x44 */ unsigned char unk_0x44[0x14];
-	/* 0x58 */ unsigned int StaggerType;
-	/* 0x5C */ unsigned char Prone; /* Nonzero when entity is laying on the ground, used to detect when you can Mortal Blow. Forcing this to a nonzero value allows you to mortal blow enemies who would otherwise be unable to go prone. */
-	/* 0x5D */ unsigned char unk_0x5D[0x07];
-	/* 0x64 */ unsigned int Will;
-	/* 0x68 */ float StaggerTimer; /* Time remaining for the current stagger. This does not include half staggers, but does include trash mobs' super armor. */
-	/* 0x6C */ float StaggerTimer1; /* unsure what this is for, it is set with eStaggerType::FULL, possibly initial stagger timer, or stagger timer length? */
-	/* 0x70 */ float unk_0x70;
-	/* 0x74 */ unsigned char WillBarHalf; /* For enemies with will bars, determines the half of the will bar we are using. 0 = right, 1 = left. When Will reaches 0, if it is on the right, it switches to the left, and Will resets. */
-	/* 0x75 */ unsigned char WillBarHalf1; /* Similar to the above value, but I'm not sure of it's purpose. */
-	/* 0x76 */ unsigned char unk_0x76[0x02];
-	/* 0x78 */ unsigned int StaggerDamageDealt; /* Raw damage dealth when an enemy is fully staggered. Used to determine damage multiplier? */
-	/* 0x7C */ unsigned int StaggerDamageDealtScaled; /* Damage dealth after the damage multiplier when an enemy is fully staggered, what is displayed in the "Stagger Damage" message. */
-} CombatActor;
-
 static SafetyHookInline sNormalDamageInlineHook{};
 static SafetyHookInline sWillDamageInlineHook{};
 
-unsigned char GameplayTweak_NormalDamageHook(CombatActor* thisx, int healthDelta) {
-	// likely bad assumptions
-	uint32_t unk_0x18 = *reinterpret_cast<uint32_t*>((intptr_t)thisx + 0x18);
-	uint32_t unk_0x38 = *reinterpret_cast<uint32_t*>((intptr_t)thisx + 0x38);
-	spdlog::info("unk_0x18 {} unk_0x38: {}", unk_0x18, unk_0x38);
-	if (unk_0x18 == 0 && unk_0x38 == 1) {
+unsigned char GameplayTweak_NormalDamageHook(CombatDetail* thisx, int healthDelta) {
+	if (thisx->Will == 20 && thisx->WillBarHalf == 0 && thisx->WillBarHalf1 == 0) {
 		healthDelta *= fCliveDamageScale;
 	}
 	else {
@@ -1376,7 +1342,7 @@ unsigned char GameplayTweak_NormalDamageHook(CombatActor* thisx, int healthDelta
 	return sNormalDamageInlineHook.call<unsigned char>(thisx, healthDelta);
 }
 
-int GameplayTweak_WillDamageHook(CombatActor* thisx, int willDelta, unsigned char arg3, unsigned char arg4) {
+int GameplayTweak_WillDamageHook(CombatDetail* thisx, int willDelta, unsigned char arg3, unsigned char arg4) {
 	willDelta *= fWillDamageScale;
 	return sWillDamageInlineHook.call<int>(thisx, willDelta, arg3, arg4);
 }
@@ -1419,7 +1385,6 @@ void GameplayTweaks()
 		if (PartialStaggerScanResult) {
 			spdlog::info("Stagger Type 1: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)PartialStaggerScanResult - (uintptr_t)baseModule);
 			static SafetyHookMid PartialStaggerMidHook{};
-			static SafetyHookInline PartialStaggerInlineHook{};
 
 			// effectively creating a code cave here
 			Memory::PatchBytes((uintptr_t)PartialStaggerScanResult, "\x90\x90\x90\x90\x90\x90\x90", 7);
@@ -1427,7 +1392,7 @@ void GameplayTweaks()
 				[](SafetyHookContext& ctx) {
 					if (ctx.r9 != 0) {
 						float original = *reinterpret_cast<float*>(ctx.r9 + 0x7C);
-						reinterpret_cast<CombatActor*>(ctx.rbx)->StaggerTimer = original * fStaggerTimerMultiplierType1;
+						reinterpret_cast<CombatDetail*>(ctx.rbx)->StaggerTimer = original * fStaggerTimerMultiplierType1;
 					}
 				});
 		}
