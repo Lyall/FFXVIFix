@@ -34,6 +34,7 @@ int iHUDSize;
 bool bFixMovies;
 bool bFixFOV;
 float fGameplayCamFOV;
+float fLockonCamFOV;
 float fGameplayCamHorPos;
 float fGameplayCamVertPos;
 float fGameplayCamDistMulti;
@@ -224,6 +225,7 @@ void Configuration()
     inipp::get_value(ini.sections["Fix Movies"], "Enabled", bFixMovies);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay Camera"], "AdditionalFOV", fGameplayCamFOV);
+	inipp::get_value(ini.sections["Gameplay Camera"], "AdditionalFOVLockOn", fLockonCamFOV);
     inipp::get_value(ini.sections["Gameplay Camera"], "HorizontalPos", fGameplayCamHorPos);
     inipp::get_value(ini.sections["Gameplay Camera"], "VerticalPos", fGameplayCamVertPos);
     inipp::get_value(ini.sections["Gameplay Camera"], "DistanceMultiplier", fGameplayCamDistMulti);
@@ -259,6 +261,11 @@ void Configuration()
         spdlog::warn("Config Parse: fGameplayCamFOV value invalid, clamped to {}", fGameplayCamFOV);
     }
     spdlog::info("Config Parse: fGameplayCamFOV: {}", fGameplayCamFOV);
+	if (fLockonCamFOV < -40.00f || fLockonCamFOV > 140.00f) {
+		fLockonCamFOV = std::clamp(fLockonCamFOV, -40.00f, 140.00f);
+		spdlog::warn("Config Parse: fLockonCamFOV value invalid, clamped to {}", fLockonCamFOV);
+	}
+	spdlog::info("Config Parse: fLockonCamFOV: {}", fLockonCamFOV);
     if (fGameplayCamHorPos < -5.00f || fGameplayCamHorPos > 5.00f) {
         fGameplayCamHorPos = std::clamp(fGameplayCamHorPos, -5.00f, 5.00f);
         spdlog::warn("Config Parse: fGameplayCamHorPos value invalid, clamped to {}", fGameplayCamHorPos);
@@ -776,6 +783,22 @@ void Camera()
             spdlog::error("Gameplay Camera: FOV: Pattern scan failed.");
         }
     }
+
+	if (fLockonCamFOV != 0.00f) {
+		uint8_t* LockOnFOVScanResult = Memory::PatternScan(baseModule, "c5 fa ?? ?? ?? ?? ?? ?? c3 cc cc cc 48 8b 42 ?? 48 89 41"); // a function that returns 0.6981317f from rodata, called from a function pointer at the sig 'ff 90 ?? ?? 00 00 c5 fa 11 47 ?? 48 8b 03 48 8b cb'
+		if (LockOnFOVScanResult) {
+			spdlog::info("Gameplay Camera: LockOn FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)LockOnFOVScanResult - (uintptr_t)baseModule);
+
+			static SafetyHookMid LockOnFOVMidHook{};
+			LockOnFOVMidHook = safetyhook::create_mid(LockOnFOVScanResult + 8,
+				[](SafetyHookContext& ctx) {
+					ctx.xmm0.f32[0] += (fLockonCamFOV * (fPi / 180.0f));
+				});
+		}
+		else if (!LockOnFOVScanResult) {
+			spdlog::error("Gameplay Camera: LockOn FOV: Pattern scan failed.");
+		}
+	}
 
     if (fGameplayCamHorPos != 0.95f || fGameplayCamVertPos != -0.65f) {
         // Gameplay Camera Position
