@@ -776,7 +776,8 @@ void Camera()
             static SafetyHookMid GameplayFOVMidHook{};
             GameplayFOVMidHook = safetyhook::create_mid(GameplayFOVScanResult + 0x10,
                 [](SafetyHookContext& ctx) {
-                    ctx.xmm0.f32[0] += fGameplayCamFOV;
+					float fov = std::clamp(ctx.xmm0.f32[0] + fGameplayCamFOV, 1.0f, 179.0f);
+                    ctx.xmm0.f32[0] = fov;
                 });
         }
         else if (!GameplayFOVScanResult) {
@@ -792,7 +793,9 @@ void Camera()
 			static SafetyHookMid LockOnFOVMidHook{};
 			LockOnFOVMidHook = safetyhook::create_mid(LockOnFOVScanResult + 8,
 				[](SafetyHookContext& ctx) {
-					ctx.xmm0.f32[0] += (fLockonCamFOV * (fPi / 180.0f));
+					const float DTOR = fPi / 180.0f;
+					float fov = std::clamp(ctx.xmm0.f32[0] + (fLockonCamFOV * DTOR), 1 * DTOR, 179 * DTOR);
+					ctx.xmm0.f32[0] = fov;
 				});
 		}
 		else if (!LockOnFOVScanResult) {
