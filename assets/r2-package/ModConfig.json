@@ -1,0 +1,33 @@
+{
+  "ModId": "ff16.ffxvifix",
+  "ModName": "FFXVIFix",
+  "ModAuthor": "Lyall",
+  "ModVersion": "<REPLACED_VERSION_IN_CI>",
+  "ModDescription": "A fix for Final Fantasy XVI. Edit `FFXVIFix.ini` in Mod Folder to configure settings.",
+  "ModDll": "",
+  "ModIcon": "",
+  "ModR2RManagedDll32": "",
+  "ModR2RManagedDll64": "",
+  "ModNativeDll32": "",
+  "ModNativeDll64": "FFXVIFix.asi",
+  "Tags": [],
+  "CanUnload": null,
+  "HasExports": null,
+  "IsLibrary": false,
+  "ReleaseMetadataFileName": "ff16.ffxvifix.ReleaseMetadata.json",
+  "PluginData": {
+    "GitHubRelease": {
+      "UserName": "Lyall",
+      "RepositoryName": "FFXVIFix",
+      "UseReleaseTag": true,
+      "AssetFileName": "FFXVIFix_Reloaded-II.zip"
+    }
+  },
+  "IsUniversalMod": false,
+  "ModDependencies": [],
+  "OptionalDependencies": [],
+  "SupportedAppId": [
+      "ffxvi.exe"
+  ],
+  "ProjectUrl": "https://github.com/Lyall/FFXVIFix"
+}
