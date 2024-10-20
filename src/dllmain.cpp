@@ -36,6 +36,7 @@ bool bFixMovies;
 bool bAltFixMovies;
 bool bFixFOV;
 float fGameplayCamFOV;
+float fLockonCamFOV;
 float fGameplayCamHorPos;
 float fGameplayCamVertPos;
 float fGameplayCamDistMulti;
@@ -234,6 +235,7 @@ void Configuration()
     inipp::get_value(ini.sections["Fix Movies"], "Alternative", bAltFixMovies);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay Camera"], "AdditionalFOV", fGameplayCamFOV);
+	inipp::get_value(ini.sections["Gameplay Camera"], "AdditionalFOVLockOn", fLockonCamFOV);
     inipp::get_value(ini.sections["Gameplay Camera"], "HorizontalPos", fGameplayCamHorPos);
     inipp::get_value(ini.sections["Gameplay Camera"], "VerticalPos", fGameplayCamVertPos);
     inipp::get_value(ini.sections["Gameplay Camera"], "DistanceMultiplier", fGameplayCamDistMulti);
@@ -276,6 +278,11 @@ void Configuration()
         spdlog::warn("Config Parse: fGameplayCamFOV value invalid, clamped to {}", fGameplayCamFOV);
     }
     spdlog::info("Config Parse: fGameplayCamFOV: {}", fGameplayCamFOV);
+	if (fLockonCamFOV < -40.00f || fLockonCamFOV > 140.00f) {
+		fLockonCamFOV = std::clamp(fLockonCamFOV, -40.00f, 140.00f);
+		spdlog::warn("Config Parse: fLockonCamFOV value invalid, clamped to {}", fLockonCamFOV);
+	}
+	spdlog::info("Config Parse: fLockonCamFOV: {}", fLockonCamFOV);
     if (fGameplayCamHorPos < -5.00f || fGameplayCamHorPos > 5.00f) {
         fGameplayCamHorPos = std::clamp(fGameplayCamHorPos, -5.00f, 5.00f);
         spdlog::warn("Config Parse: fGameplayCamHorPos value invalid, clamped to {}", fGameplayCamHorPos);
@@ -825,84 +832,104 @@ void HUD()
     }
 }
 
+static SafetyHookInline sLockOnFOVInlineHook{};
+
+float LockOnFOVHook(void) {
+	const float DTOR = fPi / 180.0f;
+	float result = sLockOnFOVInlineHook.call<float>();
+	return std::clamp(result + (fLockonCamFOV * DTOR), 1.0f * DTOR, 179.0f * DTOR);
+}
+
 void Camera()
 {
-    if (bFixFOV) { 
-        // Fix <16:9 FOV
-        uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "89 ?? ?? ?? ?? ?? 48 8B ?? ?? 48 8B ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 48 8B ?? 48 8B ?? FF 90 ?? ?? ?? ??");
-        if (FOVScanResult) {
-            spdlog::info("FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FOVScanResult - (uintptr_t)baseModule);
+	if (bFixFOV) {
+		// Fix <16:9 FOV
+		uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "89 ?? ?? ?? ?? ?? 48 8B ?? ?? 48 8B ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? 48 8B ?? 48 8B ?? FF 90 ?? ?? ?? ??");
+		if (FOVScanResult) {
+			spdlog::info("FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FOVScanResult - (uintptr_t)baseModule);
 
-            static SafetyHookMid FOVMidHook{};
-            FOVMidHook = safetyhook::create_mid(FOVScanResult,
-                [](SafetyHookContext& ctx) {
-                    // Fix cropped FOV when at <16:9
-                    if (fAspectRatio < fNativeAspect) {
-                        float fov = *reinterpret_cast<float*>(&ctx.rax);
-                        fov = 2.0f * atanf(tanf(fov / 2.0f) * (fNativeAspect / fAspectRatio));
-                        ctx.rax = *(uint32_t*)&fov;
-                    }     
-                });
-        }
-        else if (!FOVScanResult) {
-            spdlog::error("FOV: Pattern scan failed.");
-        }
-    }
+			static SafetyHookMid FOVMidHook{};
+			FOVMidHook = safetyhook::create_mid(FOVScanResult,
+				[](SafetyHookContext& ctx) {
+					// Fix cropped FOV when at <16:9
+					if (fAspectRatio < fNativeAspect) {
+						float fov = *reinterpret_cast<float*>(&ctx.rax);
+						fov = 2.0f * atanf(tanf(fov / 2.0f) * (fNativeAspect / fAspectRatio));
+						ctx.rax = *(uint32_t*)&fov;
+					}
+				});
+		}
+		else if (!FOVScanResult) {
+			spdlog::error("FOV: Pattern scan failed.");
+		}
+	}
 
-    if (fGameplayCamFOV != 0.00f) {
-        // Gameplay FOV
-        uint8_t* GameplayFOVScanResult = Memory::PatternScan(baseModule, "48 8D ?? ?? ?? ?? ?? C3 C5 FA ?? ?? ?? ?? ?? 00 C5 FA ?? ?? ?? ?? ?? ?? C5 F2 ?? ?? ?? ?? ?? ?? C3");
-        if (GameplayFOVScanResult) {
-            spdlog::info("Gameplay Camera: FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayFOVScanResult - (uintptr_t)baseModule);
+	if (fGameplayCamFOV != 0.00f) {
+		// Gameplay FOV
+		uint8_t* GameplayFOVScanResult = Memory::PatternScan(baseModule, "48 8D ?? ?? ?? ?? ?? C3 C5 FA ?? ?? ?? ?? ?? 00 C5 FA ?? ?? ?? ?? ?? ?? C5 F2 ?? ?? ?? ?? ?? ?? C3");
+		if (GameplayFOVScanResult) {
+			spdlog::info("Gameplay Camera: FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayFOVScanResult - (uintptr_t)baseModule);
 
-            static SafetyHookMid GameplayFOVMidHook{};
-            GameplayFOVMidHook = safetyhook::create_mid(GameplayFOVScanResult + 0x10,
-                [](SafetyHookContext& ctx) {
-                    ctx.xmm0.f32[0] += fGameplayCamFOV;
-                });
-        }
-        else if (!GameplayFOVScanResult) {
-            spdlog::error("Gameplay Camera: FOV: Pattern scan failed.");
-        }
-    }
+			static SafetyHookMid GameplayFOVMidHook{};
+			GameplayFOVMidHook = safetyhook::create_mid(GameplayFOVScanResult + 0x10,
+				[](SafetyHookContext& ctx) {
+					float fov = std::clamp(ctx.xmm0.f32[0] + fGameplayCamFOV, 1.0f, 179.0f);
+					ctx.xmm0.f32[0] = fov;
+				});
+		}
+		else if (!GameplayFOVScanResult) {
+			spdlog::error("Gameplay Camera: FOV: Pattern scan failed.");
+		}
+	}
 
-    if (fGameplayCamHorPos != 0.95f || fGameplayCamVertPos != -0.65f) {
-        // Gameplay Camera Position
-        uint8_t* GameplayCameraPosScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 8B ?? 41 ?? ?? 48 8D ?? ?? E8 ?? ?? ?? ??");
-        if (GameplayCameraPosScanResult) {
-            spdlog::info("Gameplay Camera: Position: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayCameraPosScanResult - (uintptr_t)baseModule);
+	if (fLockonCamFOV != 0.00f) {
+		uint8_t* LockOnFOVScanResult = Memory::PatternScan(baseModule, "c5 fa ?? ?? ?? ?? ?? ?? c3 cc cc cc 48 8b 42 ?? 48 89 41"); // a function that returns 0.6981317f from rodata, called from a function pointer at the sig 'ff 90 ?? ?? 00 00 c5 fa 11 47 ?? 48 8b 03 48 8b cb'
+		if (LockOnFOVScanResult) {
+			spdlog::info("Gameplay Camera: LockOn FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)LockOnFOVScanResult - (uintptr_t)baseModule);
+			sLockOnFOVInlineHook = safetyhook::create_inline(reinterpret_cast<void*>(LockOnFOVScanResult), LockOnFOVHook);
+		}
+		else if (!LockOnFOVScanResult) {
+			spdlog::error("Gameplay Camera: LockOn FOV: Pattern scan failed.");
+		}
+	}
 
-            static SafetyHookMid GameplayCameraHorPosMidHook{};
-            GameplayCameraHorPosMidHook = safetyhook::create_mid(GameplayCameraPosScanResult + 0x8,
-                [](SafetyHookContext& ctx) {
-                    if (fGameplayCamHorPos != 0.95f) 
-                    ctx.xmm1.f32[0] = fGameplayCamHorPos;
+	if (fGameplayCamHorPos != 0.95f || fGameplayCamVertPos != -0.65f) {
+		// Gameplay Camera Position
+		uint8_t* GameplayCameraPosScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 8B ?? 41 ?? ?? 48 8D ?? ?? E8 ?? ?? ?? ??");
+		if (GameplayCameraPosScanResult) {
+			spdlog::info("Gameplay Camera: Position: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayCameraPosScanResult - (uintptr_t)baseModule);
 
-                    if (fGameplayCamVertPos != -0.65f)
-                    ctx.xmm2.f32[0] = fGameplayCamVertPos;
-                });
-        }
-        else if (!GameplayCameraPosScanResult) {
-            spdlog::error("Gameplay Camera: Position: Pattern scan failed.");
-        }
-    }
+			static SafetyHookMid GameplayCameraHorPosMidHook{};
+			GameplayCameraHorPosMidHook = safetyhook::create_mid(GameplayCameraPosScanResult + 0x8,
+				[](SafetyHookContext& ctx) {
+					if (fGameplayCamHorPos != 0.95f)
+						ctx.xmm1.f32[0] = fGameplayCamHorPos;
 
-    if (fGameplayCamDistMulti != 1.00f) {
-        // Gameplay Camera Distance
-        uint8_t* GameplayCameraDistScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 48 8D ?? ?? ?? ?? ?? 4C 8D ?? ?? ?? ?? ?? 48 8B ?? C4 ?? ?? ?? ?? E8 ?? ?? ?? ??");
-        if (GameplayCameraDistScanResult) {
-            spdlog::info("Gameplay Camera: Distance: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayCameraDistScanResult - (uintptr_t)baseModule);
+					if (fGameplayCamVertPos != -0.65f)
+						ctx.xmm2.f32[0] = fGameplayCamVertPos;
+				});
+		}
+		else if (!GameplayCameraPosScanResult) {
+			spdlog::error("Gameplay Camera: Position: Pattern scan failed.");
+		}
+	}
 
-            static SafetyHookMid GameplayCameraDistMidHook{};
-            GameplayCameraDistMidHook = safetyhook::create_mid(GameplayCameraDistScanResult,
-                [](SafetyHookContext& ctx) {
-                    ctx.xmm3.f32[0] *= fGameplayCamDistMulti;
-                });
-        }
-        else if (!GameplayCameraDistScanResult) {
-            spdlog::error("Gameplay Camera: Distance: Pattern scan failed.");
-        }
-    }  
+	if (fGameplayCamDistMulti != 1.00f) {
+		// Gameplay Camera Distance
+		uint8_t* GameplayCameraDistScanResult = Memory::PatternScan(baseModule, "C5 ?? ?? ?? ?? ?? ?? ?? 48 8D ?? ?? ?? ?? ?? 4C 8D ?? ?? ?? ?? ?? 48 8B ?? C4 ?? ?? ?? ?? E8 ?? ?? ?? ??");
+		if (GameplayCameraDistScanResult) {
+			spdlog::info("Gameplay Camera: Distance: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameplayCameraDistScanResult - (uintptr_t)baseModule);
+
+			static SafetyHookMid GameplayCameraDistMidHook{};
+			GameplayCameraDistMidHook = safetyhook::create_mid(GameplayCameraDistScanResult,
+				[](SafetyHookContext& ctx) {
+					ctx.xmm3.f32[0] *= fGameplayCamDistMulti;
+				});
+		}
+		else if (!GameplayCameraDistScanResult) {
+			spdlog::error("Gameplay Camera: Distance: Pattern scan failed.");
+		}
+	}
 }
 
 void Framerate()
