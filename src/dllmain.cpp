@@ -33,6 +33,7 @@ int iWindowedResY;
 bool bFixHUD;
 int iHUDSize;
 bool bFixMovies;
+bool bAltFixMovies;
 bool bFixFOV;
 float fGameplayCamFOV;
 float fGameplayCamHorPos;
@@ -230,6 +231,7 @@ void Configuration()
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
     inipp::get_value(ini.sections["Fix HUD"], "HUDSize", iHUDSize);
     inipp::get_value(ini.sections["Fix Movies"], "Enabled", bFixMovies);
+    inipp::get_value(ini.sections["Fix Movies"], "Alternative", bAltFixMovies);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Gameplay Camera"], "AdditionalFOV", fGameplayCamFOV);
     inipp::get_value(ini.sections["Gameplay Camera"], "HorizontalPos", fGameplayCamHorPos);
@@ -696,7 +698,7 @@ void HUD()
         }
     }
 
-    if (bFixMovies) {
+    if (bFixMovies && !bAltFixMovies) {
         // Get movie status 
         uint8_t* MovieStatusScanResult = Memory::PatternScan(baseModule, "0F 84 ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? ?? ?? C4 ?? ?? ?? ?? 48 8B ?? 80 ?? ?? ?? ?? ?? 02");
         if (MovieStatusScanResult) {
@@ -786,6 +788,39 @@ void HUD()
         }
         else if (!MovieOffsetScanResult) {
             spdlog::error("HUD: Movies: Offset: Pattern scan failed.");
+        }
+    }
+
+    if (bFixMovies && bAltFixMovies) {
+        // Alternative movie fix
+        uint8_t* AltMoviesScanResult = Memory::PatternScan(baseModule, "8B ?? ?? 48 8B ?? C5 ?? ?? ?? C4 ?? ?? ?? ?? C5 ?? ?? ?? ?? ?? C5 ?? ?? ?? ?? ??");
+        if (AltMoviesScanResult) {
+            spdlog::info("HUD: Movies (Alt): Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)AltMoviesScanResult - (uintptr_t)baseModule);
+            // Change xmm8 to xmm9
+            Memory::PatchBytes((uintptr_t)AltMoviesScanResult + 0x1E, "\x4C", 1);
+
+            static SafetyHookMid AltMoviesMidHook{};
+            AltMoviesMidHook = safetyhook::create_mid(AltMoviesScanResult + 0xF,
+                [](SafetyHookContext& ctx) {
+                    float Width = ctx.xmm0.f32[0];
+                    float Height = ctx.xmm1.f32[0];
+
+                    if (fAspectRatio > fNativeAspect) {
+                        float HUDWidth = Height * fNativeAspect;
+                        float WidthOffset = (Width - HUDWidth) / 2.00f;
+                        ctx.xmm0.f32[0] = HUDWidth + WidthOffset;
+                        ctx.xmm9.f32[0] = WidthOffset;
+                    }
+                    else if (fAspectRatio < fNativeAspect) {
+                        float HUDHeight = Width / fNativeAspect;
+                        float HeightOffset = (Height - HUDHeight) / 2.00f;
+                        ctx.xmm1.f32[0] = HUDHeight + HeightOffset;
+                        ctx.xmm8.f32[0] = HeightOffset;
+                    }
+                });
+        }
+        else if (!AltMoviesScanResult) {
+            spdlog::error("HUD: Movies (Alt): Pattern scan failed.");
         }
     }
 }
