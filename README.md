@@ -6,7 +6,7 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrower support, uncaps
 
 ## Features
 ### General
-- Adjust gameplay FOV, camera distance and camera horizontal position.
+- Adjust gameplay/lock-on FOV, camera distance and camera horizontal position.
 - JXL screenshot quality option and fixes hitching while taking screenshots.
 - Allow the use of motion blur + frame generation.
 - Disable depth of field.
@@ -14,6 +14,10 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrower support, uncaps
 - Lock cursor to game window.
 - Resize game window.
 - Disable display sleep/screensaver while the game is running.
+
+### Gameplay Tweaks
+- Adjust stagger timers.
+- Adjust damage scale.
 
 ### Performance
 - Disable 30FPS cap in cutscenes/photo mode or set your own framerate limit.
@@ -35,12 +39,32 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrower support, uncaps
 🚩**You do not need to do this if you are using Windows!**
 - Open up the game properties in Steam and add `WINEDLLOVERRIDES="dinput8=n,b" %command%` to the launch options.
 
+<details>
+<summary>Installing FFXVIFix as a Reloaded II Mod</summary>
+  
+*This applies to both Windows and Steam Deck/Linux*
+
+Before starting, make sure to **delete any FFXVIFix files** inside of the game's files **if you have already have used this fix** previously (*FFXVIFix.ini*, *FFXVIFix.asi* and *dinput8.dll*)
+
+To make sure FFXVIFix loads alongside any Reloaded II mods you are using, follow these steps:
+
+- Download the file marked `FFXVIFix_Reloaded-II.zip` from the the latest release.
+
+- Click "Download Mods" in Reloaded-II, then drag and drop `FFXVIFix_Reloaded-II.zip` onto the window. (Alternatively: [Manual Install](https://reloaded-project.github.io/Reloaded-II/QuickStart/))
+
+- Enable it in your `Reloaded-II` mod list.
+- You should now be able to start the game and see both FFXVIFix and Reloaded II mods working.
+
+</details>
+
 ## Configuration
 - See **FFXVIFix.ini** to adjust settings for the fix.
 
 ## Known Issues
 Please report any issues you see.
 This list will contain bugs which may or may not be fixed.
+
+- Some movie cutscenes may appear stretched for some users. Try enabling the "Alternate" option if `FFXVIFix.ini` if this occurs for you. ([#82](https://github.com/Lyall/FFXVIFix/issues/82))
 
 ## Screenshots
 | ![ezgif-4-40bff8440e](https://github.com/user-attachments/assets/74416ddf-43fe-4607-b608-c2e499cbe78b) |
