@@ -11,7 +11,6 @@ This is a fix for Final Fantasy XVI that adds ultrawide/narrower support, uncaps
 - Allow the use of motion blur + frame generation.
 - Disable depth of field.
 - Enable background audio.
-- Lock cursor to game window.
 - Resize game window.
 - Disable display sleep/screensaver while the game is running.
 
