@@ -63,7 +63,7 @@ To make sure FFXVIFix loads alongside any Reloaded II mods you are using, follow
 Please report any issues you see.
 This list will contain bugs which may or may not be fixed.
 
-- Some movie cutscenes may appear stretched for some users. Try enabling the "Alternate" option if `FFXVIFix.ini` if this occurs for you. ([#82](https://github.com/Lyall/FFXVIFix/issues/82))
+- Some movie cutscenes may appear stretched for some users. Try enabling the "Alternate" option in `FFXVIFix.ini` if this occurs for you. ([#82](https://github.com/Lyall/FFXVIFix/issues/82))
 
 ## Screenshots
 | ![ezgif-4-40bff8440e](https://github.com/user-attachments/assets/74416ddf-43fe-4607-b608-c2e499cbe78b) |
