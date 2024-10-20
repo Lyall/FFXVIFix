@@ -50,7 +50,6 @@ bool bDisableDbgCheck;
 bool bDisableDOF;
 bool bDisableCinematicEffects;
 bool bBackgroundAudio;
-bool bLockCursor;
 bool bResizableWindow;
 bool bDisableScreensaver;
 bool bAdjustStaggerTimers;
@@ -248,7 +247,6 @@ void Configuration()
     inipp::get_value(ini.sections["Disable Depth of Field"], "Enabled", bDisableDOF);
     inipp::get_value(ini.sections["Disable Cinematic Effects"], "Enabled", bDisableCinematicEffects);
     inipp::get_value(ini.sections["Game Window"], "BackgroundAudio", bBackgroundAudio);
-    inipp::get_value(ini.sections["Game Window"], "LockCursor", bLockCursor);
     inipp::get_value(ini.sections["Game Window"], "Resizable", bResizableWindow);
     inipp::get_value(ini.sections["Game Window"], "DisableScreensaver", bDisableScreensaver);
     inipp::get_value(ini.sections["Dynamic Resolution"], "MaxResolution", iMaxDynRes);
@@ -319,7 +317,6 @@ void Configuration()
     spdlog::info("Config Parse: bDisableDOF: {}", bDisableDOF);
     spdlog::info("Config Parse: bDisableCinematicEffects: {}", bDisableCinematicEffects);
     spdlog::info("Config Parse: bBackgroundAudio: {}", bBackgroundAudio);
-    spdlog::info("Config Parse: bLockCursor: {}", bLockCursor);
     spdlog::info("Config Parse: bResizableWindow: {}", bResizableWindow);
     spdlog::info("Config Parse: bDisableScreensaver: {}", bDisableScreensaver);
     if (iMaxDynRes < 50 || iMaxDynRes > 100) {
@@ -1124,24 +1121,6 @@ ShowWindow_hk(
     return ShowWindow_sh.stdcall<BOOL>(hWnd, nCmdShow);
 }
 
-SafetyHookInline ClipCursor_sh{};
-BOOL ClipCursor_hk(const RECT *lpRect)
-{
-    RECT bounds = {};
-
-    if (bWindowFocused == FALSE || bSizeMove || GetForegroundWindow () != hWndGame) {
-        lpRect = nullptr;
-    }
-    
-    else if (bLockCursor && bWindowFocused) {
-        GetWindowRect(hWndGame, &bounds);
-        InflateRect(&bounds, -7, -7); // Keep the cursor within the grabby bits of the window frame
-
-        lpRect = &bounds;
-    }
-
-    return ClipCursor_sh.stdcall<BOOL>(lpRect);
-}
 LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPARAM l_param)
 {
     if (window != hWndGame)
@@ -1157,7 +1136,6 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
     }
 
     BOOL style_changed    = FALSE;
-    BOOL need_clip_cursor = FALSE;
 
     HWND hWndForeground =
           GetForegroundWindow ();
@@ -1180,13 +1158,11 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
                 }
             }
 
-            need_clip_cursor = TRUE;
             CallWindowProc(OldWndProc, hWndGame, WM_ACTIVATE, WA_CLICKACTIVE, 0);
         }
     }
-    else if (! bBackgroundAudio) {
+    else if (!bBackgroundAudio) {
         if (std::exchange(bWindowFocused, false)) {
-            need_clip_cursor = TRUE;
             CallWindowProc(OldWndProc, hWndGame, WM_ACTIVATE, WA_INACTIVE, 0);
         }
     }
@@ -1210,23 +1186,14 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
     case WM_ENTERSIZEMOVE:
     case WM_EXITSIZEMOVE:
         bSizeMove        = (message_type == WM_ENTERSIZEMOVE);
-        need_clip_cursor = TRUE;
         break;
 
     case WM_KILLFOCUS:
-    case WM_SETFOCUS:
-    {
-        need_clip_cursor = TRUE;
-    } break;
-
     case WM_ACTIVATE:
     case WM_ACTIVATEAPP:
     case WM_NCACTIVATE:
         return DefWindowProcW(window, message_type, w_param, l_param);
     }
-
-    if (need_clip_cursor)
-        ClipCursor_hk(NULL); // The hook will calculate the actual rectangle to use
 
     if (style_changed) // Force window to update
       SetWindowPos(window, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE   |
@@ -1237,17 +1204,25 @@ LRESULT __stdcall NewWndProc(HWND window, UINT message_type, WPARAM w_param, LPA
 
 void SubclassGameWindow (HWND hWnd)
 {
-    FARPROC ClipCursor_fn = GetProcAddress(GetModuleHandleW (L"user32.dll"), "ClipCursor");
-    ClipCursor_sh = safetyhook::create_inline(ClipCursor_fn, reinterpret_cast<void*>(ClipCursor_hk));
+    HMODULE user32Module = GetModuleHandleW(L"user32.dll");
+    if (user32Module) {
+        FARPROC ShowWindow_fn = GetProcAddress(user32Module, "ShowWindow");
+        if (ShowWindow_fn) {
+            ShowWindow_sh = safetyhook::create_inline(ShowWindow_fn, reinterpret_cast<void*>(ShowWindow_hk));
 
-    FARPROC ShowWindow_fn = GetProcAddress(GetModuleHandleW (L"user32.dll"), "ShowWindow");
-    ShowWindow_sh = safetyhook::create_inline(ShowWindow_fn, reinterpret_cast<void*>(ShowWindow_hk));
+            // Set new wnd proc
+            OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)NewWndProc);
+            spdlog::info("Window Focus: Subclassed Game Window");
 
-    // Set new wnd proc
-    OldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)NewWndProc);
-    spdlog::info("Window Focus: Subclassed Game Window");
-
-    hWndGame = hWnd;
+            hWndGame = hWnd;
+        }
+        else {
+            spdlog::error("Window Focus: Failed to get function address for ShowWindow.");
+        }
+    }
+    else {
+        spdlog::error("Window Focus: Failed to get module handle for user32.dll.");
+    }
 }
 
 LRESULT CALLBACK CallWndProcHook (
@@ -1305,7 +1280,7 @@ DWORD GetMainThreadId (void)
 
 void WindowFocus()
 {
-    if (bBackgroundAudio || bLockCursor || bResizableWindow || bDisableScreensaver) {
+    if (bBackgroundAudio || bResizableWindow || bDisableScreensaver) {
         // Hook wndproc and then subclass the window when we find the game's main window
         hkCallWndProc =
           SetWindowsHookExW (WH_CALLWNDPROC, CallWndProcHook, 0, GetMainThreadId ());
